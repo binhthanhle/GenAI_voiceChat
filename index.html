@@ -16,8 +16,7 @@
             align-items: center;
             min-height: 100vh;
             background-color: #f3f4f6;
-            padding-top: 2rem;
-            padding-bottom: 2rem;
+            padding: 2rem; /* Added padding top/bottom */
         }
         .app-container {
             background-color: white;
@@ -25,7 +24,7 @@
             border-radius: 1rem;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
             width: 90%;
-            max-width: 600px;
+            max-width: 700px; /* Increased max-width */
             text-align: center;
         }
         .status-indicator {
@@ -42,9 +41,9 @@
             padding: 1rem;
             margin-top: 0.5rem;
             text-align: left;
-            min-height: 60px;
+            min-height: 80px; /* Increased min-height */
             overflow-y: auto;
-            max-height: 150px;
+            max-height: 250px; /* Increased max-height */
         }
         .session-button {
             transition: all 0.3s ease;
@@ -194,11 +193,10 @@
 
         // --- Configuration ---
         const GEMINI_MODEL = "gemini-2.0-flash";
-        const SILENCE_TIMEOUT_MS = 1000; // 3 seconds
+        const SILENCE_TIMEOUT_MS = 3000; // 3 seconds
 
         // --- ElevenLabs Configuration ---
         const ELEVENLABS_API_KEY = "sk_c8ea1b9d4af1e1ca4418c9a714553a35fc684f2263ca8521"; // User provided key
-        // Define voice IDs based on input language
         const ELEVENLABS_VOICE_IDS = {
             "en-US": "21m00Tcm4TlvDq8ikWAM", // English voice ID
             "vi-VN": "3VnrjnYrskPMDsapTr8X"  // Vietnamese voice ID
@@ -239,7 +237,7 @@
             currentSttLang = event.target.value;
             console.log("STT Language changed to:", currentSttLang);
             if (isSessionActive) {
-                stopRecognition(true); // Restart recognition with new language
+                stopRecognition(true);
             }
         });
 
@@ -252,7 +250,7 @@
 
         // Audio Player Listeners
         audioPlayer.onended = () => {
-            console.log('ElevenLabs audio finished playing.');
+            console.log('Audio finished playing.');
             isSpeaking = false;
             isProcessing = false;
             setButtonSpeaking(false);
@@ -270,9 +268,9 @@
 
         audioPlayer.onerror = (e) => {
             console.error('Audio player error:', e);
-            showError("Error playing the generated audio.");
+            // Don't show error to user here, handled in speakText fallback
             isSpeaking = false;
-            isProcessing = false;
+            isProcessing = false; // Ensure processing stops on player error
             setButtonSpeaking(false);
 
             if (currentAudioObjectURL) {
@@ -281,13 +279,14 @@
             }
 
             if (isSessionActive) {
-                updateStatus("Error during playback. Listening...");
+                updateStatus("Audio playback error. Listening..."); // Informative status
                 startRecognition();
             }
         };
 
 
         // --- Session Management ---
+        // toggleSession, startSession, endSession remain the same
         function toggleSession() {
             if (isSessionActive) {
                 endSession();
@@ -317,7 +316,7 @@
             hideError();
             updateStatus("Requesting microphone access...");
             initialStartAttempt = true;
-            startRecognition(); // Attempt start, onstart will handle UI activation
+            startRecognition();
         }
 
         function endSession() {
@@ -352,6 +351,9 @@
 
 
         // --- Speech Recognition Control ---
+        // setupSpeechRecognition, startRecognition, stopRecognition,
+        // handleRecognitionResult, handleSilenceTimeout, handleRecognitionError,
+        // handleRecognitionEnd remain the same
         function setupSpeechRecognition() {
             recognition = new SpeechRecognition();
             recognition.continuous = true;
@@ -518,7 +520,7 @@
             }
 
             showError(errorMessage);
-            if (wasInitialAttempt && event.error !== 'not-allowed') { // Only reset button if not denied permission
+            if (wasInitialAttempt && event.error !== 'not-allowed') {
                  updateStatus("Failed to start microphone.");
                  sessionButton.disabled = false;
             }
@@ -543,6 +545,7 @@
 
 
         // --- Gemini API Call ---
+        // sendToGemini remains the same
         async function sendToGemini(text) {
             clearTimeout(silenceTimeout);
 
@@ -675,46 +678,47 @@
             }
         }
 
-        // --- Text-to-Speech (Using ElevenLabs) ---
+        // --- Text-to-Speech (Using ElevenLabs with Fallback) ---
         async function speakText(text) {
+            // --- Fallback Function ---
+            const handleTTSFallback = (logMessage) => {
+                console.warn(logMessage);
+                // Don't show error to user, just proceed without audio
+                isSpeaking = false;
+                isProcessing = false; // Reset processing flag as TTS part failed/skipped
+                setButtonSpeaking(false); // Update button state
+                if (isSessionActive && !isListening) {
+                    updateStatus("Listening..."); // Update status
+                    startRecognition(); // Restart listening
+                }
+            };
+
+            // --- Main TTS Logic ---
             if (!ELEVENLABS_API_KEY) {
-                showError("ElevenLabs API Key is missing in the code.");
-                isProcessing = false;
-                setButtonProcessing(false);
-                if (isSessionActive && !isListening) startRecognition();
+                handleTTSFallback("ElevenLabs API Key missing. Skipping TTS.");
                 return;
             }
             if (!text.trim() || !isSessionActive) {
-                console.log('ElevenLabs TTS skipped (no text or session ended).');
-                isProcessing = false;
-                setButtonProcessing(false);
-                 if (isSessionActive && !isListening) {
-                     updateStatus("Listening...");
-                     startRecognition();
-                 }
+                handleTTSFallback("ElevenLabs TTS skipped (no text or session ended).");
                 return;
             }
 
-            // Determine which voice ID to use based on the *input* language
-            const voiceId = ELEVENLABS_VOICE_IDS[currentSttLang] || ELEVENLABS_VOICE_IDS["en-US"]; // Default to English if mapping fails
-            const elevenLabsApiUrl = ELEVENLABS_API_BASE_URL + voiceId; // Construct URL dynamically
+            const voiceId = ELEVENLABS_VOICE_IDS[currentSttLang] || ELEVENLABS_VOICE_IDS["en-US"];
+            const elevenLabsApiUrl = ELEVENLABS_API_BASE_URL + voiceId;
 
             console.log(`Requesting speech from ElevenLabs (Voice ID: ${voiceId})...`);
-            isSpeaking = true;
+            isSpeaking = true; // Assume we will speak initially
             setButtonSpeaking(true);
             updateStatus('Generating audio...');
 
             const payload = {
                 text: text,
-                model_id: "eleven_multilingual_v2", // Use a model that supports both languages
-                voice_settings: {
-                    stability: 0.5,
-                    similarity_boost: 0.75,
-                }
+                model_id: "eleven_multilingual_v2",
+                voice_settings: { stability: 0.5, similarity_boost: 0.75 }
             };
 
             try {
-                const response = await fetch(elevenLabsApiUrl, { // Use the dynamically constructed URL
+                const response = await fetch(elevenLabsApiUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -725,41 +729,49 @@
                 });
 
                 if (!response.ok) {
-                    let errorBody = `ElevenLabs API Error: ${response.status} ${response.statusText}`;
+                    // Try to get specific error, but don't throw if it fails
+                    let errorDetail = `ElevenLabs API Error: ${response.status} ${response.statusText}`;
                     try {
                         const errorJson = await response.json();
-                        errorBody += ` - ${errorJson.detail?.message || JSON.stringify(errorJson.detail)}`;
+                        errorDetail += ` - ${errorJson.detail?.message || JSON.stringify(errorJson.detail)}`;
                     } catch (e) {
-                        const textError = await response.text();
-                        errorBody += ` - ${textError}`;
+                        try { // Try reading as text if JSON fails
+                           const textError = await response.text();
+                           errorDetail += ` - ${textError}`;
+                        } catch (textE) { /* ignore further errors */ }
                     }
-                    if (response.status === 401) { errorBody = "Invalid ElevenLabs API Key."; }
-                    else if (response.status === 429) { errorBody = "ElevenLabs API Quota Exceeded or Rate Limited."; }
-                    throw new Error(errorBody);
+                    // Don't throw, just log and fallback
+                    handleTTSFallback(`ElevenLabs API request failed: ${errorDetail}`);
+                    return; // Stop further processing in this function
                 }
 
                 const audioBlob = await response.blob();
+                // Check if blob is valid audio (basic check)
+                if (!audioBlob || audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) {
+                     handleTTSFallback(`Received invalid audio data from ElevenLabs (Type: ${audioBlob?.type}, Size: ${audioBlob?.size}). Skipping TTS.`);
+                     return;
+                }
+
                 if (currentAudioObjectURL) { URL.revokeObjectURL(currentAudioObjectURL); }
                 currentAudioObjectURL = URL.createObjectURL(audioBlob);
                 audioPlayer.src = currentAudioObjectURL;
                 updateStatus('Speaking...');
-                audioPlayer.play();
+                audioPlayer.play().catch(playError => {
+                    // Handle potential errors during play() initiation
+                    handleTTSFallback(`Error initiating audio playback: ${playError}. Skipping TTS.`);
+                });
+                // Playback completion/error handled by audioPlayer listeners
 
             } catch (error) {
-                console.error('Error calling ElevenLabs API or playing audio:', error);
-                showError(`ElevenLabs Error: ${error.message}`);
-                isSpeaking = false;
-                isProcessing = false;
-                setButtonSpeaking(false);
-                if (isSessionActive) {
-                    updateStatus("Error during audio generation. Listening...");
-                    startRecognition();
-                }
+                // Catch network errors or other unexpected issues during fetch
+                handleTTSFallback(`Error fetching or processing ElevenLabs audio: ${error}. Skipping TTS.`);
             }
+            // Note: isProcessing/isSpeaking flags are reset in audioPlayer event handlers OR in handleTTSFallback
         }
 
 
         // --- UI Updates ---
+        // UI update functions remain the same
         function updateStatus(message) {
             if ((isProcessing || isSpeaking) && (message.includes("Listening") || message.includes("Ready"))) {
                // Don't overwrite
