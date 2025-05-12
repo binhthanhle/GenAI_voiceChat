@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech -> Gemini -> Speech (ElevenLabs TTS)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        /* Styles remain the same */
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f3f4f6;
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        .app-container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+        }
+        .status-indicator {
+            min-height: 1.5rem;
+            margin-bottom: 1rem;
+            font-style: italic;
+            color: #6b7280;
+            font-weight: 500;
+        }
+        .output-box {
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 0.5rem;
+            text-align: left;
+            min-height: 60px;
+            overflow-y: auto;
+            max-height: 150px;
+        }
+        .session-button {
+            transition: all 0.3s ease;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            min-width: 150px;
+        }
+        .session-button:hover:not(:disabled) {
+            transform: scale(1.05);
+        }
+        .session-button.active-session {
+            background-color: #ef4444;
+            color: white;
+        }
+        .session-button.active-session:hover {
+            background-color: #dc2626;
+        }
+        .session-button.processing {
+            background-color: #f59e0b;
+            color: white;
+            cursor: not-allowed;
+        }
+         .session-button.speaking {
+            background-color: #3b82f6; /* Blue for speaking phase */
+            color: white;
+            cursor: not-allowed;
+        }
+        h2 {
+            margin-top: 1rem;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        label {
+            font-weight: 600;
+            color: #374151;
+            margin-right: 0.5rem;
+            white-space: nowrap;
+        }
+        input[type="password"], select {
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.75rem;
+            transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            width: auto;
+            min-width: 100px;
+        }
+        input[type="password"] {
+             flex-grow: 1;
+             max-width: 300px;
+             margin-bottom: 0;
+        }
+        input[type="password"]:focus, select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+        .config-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background-color: #f9fafb;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+        }
+        .config-row {
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             width: 100%;
+             flex-wrap: wrap;
+             gap: 0.5rem 1rem;
+        }
+        .config-row label:not(:first-child) {
+             margin-left: 1rem;
+        }
+        #audioPlayer {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <h1 class="text-2xl font-bold mb-4 text-gray-800">Speech -> Gemini -> Speech</h1>
+        <p class="text-gray-600 mb-6">Enter API Key, select language, start session. Speak your query. Pausing sends the query. Uses ElevenLabs for voice.</p>
+
+        <div class="config-section">
+             <div class="config-row">
+                <label for="apiKeyInput">Gemini API Key:</label>
+                <input type="password" id="apiKeyInput" placeholder="Enter your Gemini API key" class="flex-grow">
+             </div>
+             <div class="config-row">
+                 <label for="sttLanguage">Input Language:</label>
+                 <select id="sttLanguage">
+                     <option value="en-US" selected>English (US)</option>
+                     <option value="vi-VN">Vietnamese</option>
+                 </select>
+                 </div>
+        </div>
+
+        <button id="sessionButton" class="session-button bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-full shadow-md">
+            <i class="fas fa-play mr-2"></i> Start Session
+        </button>
+
+        <div id="status" class="status-indicator mt-4">Enter API Key and select language</div>
+
+        <div id="transcriptionSection" class="mt-4 hidden">
+            <h2 class="text-lg font-semibold">Your Query:</h2>
+            <div id="transcriptionOutput" class="output-box"></div>
+        </div>
+
+        <div id="geminiSection" class="mt-4 hidden">
+            <h2 class="text-lg font-semibold">Gemini replied:</h2>
+            <div id="geminiOutput" class="output-box"></div>
+        </div>
+
+        <div id="errorOutput" class="mt-4 text-red-600 font-semibold hidden"></div>
+
+        <audio id="audioPlayer"></audio>
+
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const sessionButton = document.getElementById('sessionButton');
+        const statusDiv = document.getElementById('status');
+        const transcriptionSection = document.getElementById('transcriptionSection');
+        const transcriptionOutput = document.getElementById('transcriptionOutput');
+        const geminiSection = document.getElementById('geminiSection');
+        const geminiOutput = document.getElementById('geminiOutput');
+        const errorOutput = document.getElementById('errorOutput');
+        const apiKeyInput = document.getElementById('apiKeyInput'); // Gemini Key
+        const sttLanguageSelect = document.getElementById('sttLanguage');
+        const audioPlayer = document.getElementById('audioPlayer');
+
+        // --- Configuration ---
+        const GEMINI_MODEL = "gemini-2.0-flash";
+        const SILENCE_TIMEOUT_MS = 1000; // 3 seconds
+
+        // --- ElevenLabs Configuration ---
+        const ELEVENLABS_API_KEY = "sk_c8ea1b9d4af1e1ca4418c9a714553a35fc684f2263ca8521"; // User provided key
+        // Define voice IDs based on input language
+        const ELEVENLABS_VOICE_IDS = {
+            "en-US": "21m00Tcm4TlvDq8ikWAM", // English voice ID
+            "vi-VN": "3VnrjnYrskPMDsapTr8X"  // Vietnamese voice ID
+        };
+        const ELEVENLABS_API_BASE_URL = `https://api.elevenlabs.io/v1/text-to-speech/`; // Base URL
+
+        // --- State ---
+        let isSessionActive = false;
+        let isListening = false;
+        let isProcessing = false;
+        let isSpeaking = false;
+        let recognition;
+        let finalTranscript = '';
+        let accumulatedGeminiResponse = '';
+        let currentSttLang = sttLanguageSelect.value;
+        let abortController = null;
+        let restartTimer = null;
+        let silenceTimeout = null;
+        let currentAudioObjectURL = null;
+        let initialStartAttempt = false;
+
+        // --- Feature Detection ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        // --- Initialization ---
+        if (!SpeechRecognition) {
+            showError("Your browser doesn't support the Web Speech Recognition API. Try Chrome or Edge.");
+            sessionButton.disabled = true;
+            sessionButton.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            setupSpeechRecognition();
+        }
+
+        // --- Event Listeners ---
+        sessionButton.addEventListener('click', toggleSession);
+
+        sttLanguageSelect.addEventListener('change', (event) => {
+            currentSttLang = event.target.value;
+            console.log("STT Language changed to:", currentSttLang);
+            if (isSessionActive) {
+                stopRecognition(true); // Restart recognition with new language
+            }
+        });
+
+        apiKeyInput.addEventListener('input', () => {
+            if (errorOutput.textContent.includes("API Key")) {
+                hideError();
+                if (!isSessionActive) updateStatus('Ready to start session');
+            }
+         });
+
+        // Audio Player Listeners
+        audioPlayer.onended = () => {
+            console.log('ElevenLabs audio finished playing.');
+            isSpeaking = false;
+            isProcessing = false;
+            setButtonSpeaking(false);
+
+            if (currentAudioObjectURL) {
+                URL.revokeObjectURL(currentAudioObjectURL);
+                currentAudioObjectURL = null;
+            }
+
+            if (isSessionActive) {
+                updateStatus("Listening...");
+                startRecognition();
+            }
+        };
+
+        audioPlayer.onerror = (e) => {
+            console.error('Audio player error:', e);
+            showError("Error playing the generated audio.");
+            isSpeaking = false;
+            isProcessing = false;
+            setButtonSpeaking(false);
+
+            if (currentAudioObjectURL) {
+                URL.revokeObjectURL(currentAudioObjectURL);
+                currentAudioObjectURL = null;
+            }
+
+            if (isSessionActive) {
+                updateStatus("Error during playback. Listening...");
+                startRecognition();
+            }
+        };
+
+
+        // --- Session Management ---
+        function toggleSession() {
+            if (isSessionActive) {
+                endSession();
+            } else {
+                startSession();
+            }
+        }
+
+        function startSession() {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                showError("Please enter your Gemini API Key above.");
+                apiKeyInput.focus();
+                return;
+            }
+             if (!ELEVENLABS_API_KEY) {
+                showError("ElevenLabs API Key is missing in the code.");
+                return;
+            }
+            if (!recognition) {
+                 showError("Speech recognition not available.");
+                 return;
+            }
+
+            console.log("Attempting to start session...");
+            finalTranscript = '';
+            hideError();
+            updateStatus("Requesting microphone access...");
+            initialStartAttempt = true;
+            startRecognition(); // Attempt start, onstart will handle UI activation
+        }
+
+        function endSession() {
+            console.log("Ending session...");
+            isSessionActive = false;
+
+            stopRecognition(false);
+            clearTimeout(silenceTimeout);
+            cancelGeminiCall();
+            if (isSpeaking) {
+                audioPlayer.pause();
+                audioPlayer.src = '';
+                 if (currentAudioObjectURL) {
+                    URL.revokeObjectURL(currentAudioObjectURL);
+                    currentAudioObjectURL = null;
+                 }
+            }
+
+            sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
+            sessionButton.classList.remove('active-session', 'processing', 'speaking');
+            sessionButton.classList.add('bg-green-500', 'hover:bg-green-600');
+            sessionButton.disabled = false;
+            apiKeyInput.disabled = false;
+            sttLanguageSelect.disabled = false;
+            updateStatus('Session Ended. Ready to start.');
+            transcriptionSection.classList.add('hidden');
+            geminiSection.classList.add('hidden');
+            isProcessing = false;
+            isSpeaking = false;
+            finalTranscript = '';
+        }
+
+
+        // --- Speech Recognition Control ---
+        function setupSpeechRecognition() {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
+            recognition.onstart = () => {
+                isListening = true;
+                console.log('Recognition started with lang:', recognition.lang);
+
+                if (initialStartAttempt) {
+                    console.log("Microphone access granted, session active.");
+                    isSessionActive = true;
+                    initialStartAttempt = false;
+                    sessionButton.innerHTML = '<i class="fas fa-stop mr-2"></i> End Session';
+                    sessionButton.classList.remove('bg-green-500', 'hover:bg-green-600');
+                    sessionButton.classList.add('active-session');
+                    apiKeyInput.disabled = true;
+                    sttLanguageSelect.disabled = true;
+                }
+
+                 if (!isProcessing && !isSpeaking) {
+                    updateStatus("Listening...");
+                 }
+            };
+
+            recognition.onresult = handleRecognitionResult;
+            recognition.onerror = handleRecognitionError;
+            recognition.onend = handleRecognitionEnd;
+
+             recognition.onspeechend = () => {
+                console.log("User stopped speaking (onspeechend).");
+                clearTimeout(silenceTimeout);
+             };
+        }
+
+        function startRecognition() {
+            if (isListening || (!isSessionActive && !initialStartAttempt)) return;
+
+            clearTimeout(restartTimer);
+            clearTimeout(silenceTimeout);
+
+            if (!isProcessing && !isSpeaking) {
+                transcriptionOutput.textContent = '';
+                transcriptionSection.classList.add('hidden');
+            }
+
+            restartTimer = setTimeout(() => {
+                try {
+                    console.log("Calling recognition.start()");
+                    recognition.lang = currentSttLang;
+                    recognition.start();
+                } catch (e) {
+                    console.error("Error in recognition.start():", e);
+                    if (e.name === 'InvalidStateError') {
+                        console.warn("Attempted to start recognition in invalid state.");
+                        if (initialStartAttempt) {
+                            initialStartAttempt = false;
+                            updateStatus("Failed to start. Try again.");
+                            sessionButton.disabled = false;
+                        } else if (isSessionActive) {
+                            endSession();
+                            showError("Mic error. Session ended.");
+                        }
+                    } else {
+                         showError("Could not start listening. Microphone issue?");
+                         if (initialStartAttempt) {
+                             initialStartAttempt = false;
+                             updateStatus("Failed to start. Try again.");
+                             sessionButton.disabled = false;
+                         } else {
+                             endSession();
+                         }
+                    }
+                }
+            }, 250);
+        }
+
+        function stopRecognition(expectRestart = false) {
+            clearTimeout(restartTimer);
+            clearTimeout(silenceTimeout);
+            if (isListening && recognition) {
+                console.log("Stopping recognition. Expect restart:", expectRestart);
+                try {
+                    recognition.stop();
+                } catch (e) {
+                    console.error("Error stopping recognition:", e);
+                }
+                isListening = false;
+            }
+             if (!expectRestart && !isProcessing && !isSpeaking && !isSessionActive) {
+                 updateStatus("Stopped.");
+             }
+        }
+
+         function handleRecognitionResult(event) {
+            if (!isSessionActive || isProcessing || isSpeaking) return;
+
+            clearTimeout(silenceTimeout);
+
+            let interimForThisEvent = '';
+            let hasFinalInEvent = false;
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                const transcriptPart = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcriptPart.trim() + ' ';
+                    hasFinalInEvent = true;
+                } else {
+                    interimForThisEvent += transcriptPart;
+                }
+            }
+
+            const displayTranscript = finalTranscript + interimForThisEvent;
+            if (displayTranscript.trim()) {
+                transcriptionOutput.textContent = displayTranscript;
+                transcriptionSection.classList.remove('hidden');
+                transcriptionOutput.scrollTop = transcriptionOutput.scrollHeight;
+                silenceTimeout = setTimeout(handleSilenceTimeout, SILENCE_TIMEOUT_MS);
+            }
+        }
+
+        function handleSilenceTimeout() {
+             if (!isSessionActive || isProcessing || isSpeaking) return;
+
+             if (finalTranscript.trim()) {
+                 console.log(`Silence timeout (${SILENCE_TIMEOUT_MS}ms) detected.`);
+                 sendToGemini(finalTranscript);
+             } else {
+                 console.log("Silence timeout detected, but no transcript to send.");
+             }
+        }
+
+
+        function handleRecognitionError(event) {
+            isListening = false;
+            clearTimeout(silenceTimeout);
+            console.error('Speech recognition error:', event.error, 'Message:', event.message);
+            let errorMessage = `Recognition Error: ${event.error}`;
+
+            const wasInitialAttempt = initialStartAttempt;
+            initialStartAttempt = false;
+
+            if (event.error === 'not-allowed') {
+                errorMessage = "Microphone access denied. Please allow access in browser settings.";
+                if (wasInitialAttempt) {
+                    updateStatus("Permission denied. Session not started.");
+                    sessionButton.disabled = false;
+                } else {
+                    endSession();
+                }
+            } else if (event.error === 'no-speech') {
+                 console.log("No speech detected, will restart if session active.");
+                 return;
+            } else if (event.error === 'audio-capture') {
+                errorMessage = "Microphone Error. Check connection/permissions.";
+                endSession();
+            } else if (event.error === 'network') {
+                 errorMessage = "Network error during speech recognition. Check connection.";
+            } else if (event.error === 'service-not-allowed') {
+                 errorMessage = "Speech recognition service denied. Check browser/OS settings.";
+                 endSession();
+            } else {
+                 errorMessage = `Recognition Error: ${event.error}. Please try restarting the session.`;
+            }
+
+            showError(errorMessage);
+            if (wasInitialAttempt && event.error !== 'not-allowed') { // Only reset button if not denied permission
+                 updateStatus("Failed to start microphone.");
+                 sessionButton.disabled = false;
+            }
+        }
+
+        function handleRecognitionEnd() {
+            isListening = false;
+            clearTimeout(silenceTimeout);
+            console.log('Recognition ended.');
+            if (isSessionActive && !isProcessing && !isSpeaking) {
+                console.log("Session active & idle, attempting to restart recognition...");
+                startRecognition();
+            } else if (isSessionActive) {
+                 console.log("Recognition ended, but session is busy (processing/speaking). Will restart after idle.");
+            } else {
+                 console.log("Recognition ended, session inactive.");
+                 if (sessionButton.classList.contains('active-session')) {
+                     endSession();
+                 }
+            }
+        }
+
+
+        // --- Gemini API Call ---
+        async function sendToGemini(text) {
+            clearTimeout(silenceTimeout);
+
+            const queryText = text.trim();
+            if (!queryText || isProcessing || isSpeaking) {
+                console.log("Send request ignored (empty query or already busy).");
+                return;
+            }
+
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                showError("Error: Gemini API Key is missing.");
+                endSession();
+                return;
+            }
+
+            cancelGeminiCall();
+            abortController = new AbortController();
+
+            const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+            console.log('Sending to Gemini:', queryText);
+            isProcessing = true;
+            setButtonProcessing(true, 'Gemini...');
+            updateStatus('Asking Gemini...');
+            geminiSection.classList.remove('hidden');
+            geminiOutput.textContent = '...';
+            accumulatedGeminiResponse = '';
+            finalTranscript = ''; // Clear buffer *after* capturing
+
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: queryText }] }],
+            };
+
+            if (isListening) {
+                stopRecognition(false);
+                console.log("Recognition paused for Gemini call.");
+            }
+
+            try {
+                const response = await fetch(geminiApiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: abortController.signal
+                });
+
+                if (!response.ok) {
+                    let errorBody = 'Could not read error details.';
+                     let specificError = `API Error: ${response.status} ${response.statusText}.`;
+                    try {
+                        errorBody = await response.text();
+                        if (errorBody.trim().startsWith('{')) {
+                           const errorJson = JSON.parse(errorBody);
+                           errorBody = errorJson.error?.message || JSON.stringify(errorJson);
+                           if (response.status === 400 && errorBody.includes("API key not valid")) {
+                                specificError = "Invalid Gemini API Key.";
+                           } else if (response.status === 429) {
+                                specificError = "API Quota Exceeded/Rate Limited.";
+                           } else { specificError += ` Details: ${errorBody}`; }
+                        } else { specificError += ` Details: ${errorBody}`; }
+                    } catch (parseError) { specificError += ` Details: ${errorBody}`; }
+                    throw new Error(specificError);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    for (const line of lines) {
+                         if (line.startsWith('data: ')) {
+                            try {
+                                const jsonData = JSON.parse(line.substring(6));
+                                const textPart = jsonData?.candidates?.[0]?.content?.parts?.[0]?.text;
+                                if (textPart) {
+                                    accumulatedGeminiResponse += textPart;
+                                    geminiOutput.textContent = accumulatedGeminiResponse;
+                                    geminiOutput.scrollTop = geminiOutput.scrollHeight;
+                                }
+                            } catch (e) { console.warn('Error parsing SSE chunk:', e); }
+                        }
+                    }
+                }
+                 if (buffer.startsWith('data: ')) {
+                     try {
+                         const jsonData = JSON.parse(buffer.substring(6));
+                         const textPart = jsonData?.candidates?.[0]?.content?.parts?.[0]?.text;
+                         if (textPart) { accumulatedGeminiResponse += textPart; geminiOutput.textContent = accumulatedGeminiResponse; }
+                     } catch (e) { console.warn('Error parsing final SSE buffer:', e); }
+                 }
+
+                console.log('Gemini Response Complete:', accumulatedGeminiResponse.substring(0,100)+"...");
+                 if (!accumulatedGeminiResponse.trim()) {
+                    geminiOutput.textContent = "(No text response from Gemini)";
+                 }
+                speakText(accumulatedGeminiResponse || "Gemini did not reply.");
+
+            } catch (error) {
+                 if (error.name === 'AbortError') {
+                    console.log('Gemini fetch aborted.');
+                    updateStatus('Call cancelled.');
+                    geminiOutput.textContent = 'Cancelled.';
+                 } else {
+                    console.error('Error calling Gemini API:', error);
+                    showError(`${error.message}`);
+                    geminiOutput.textContent = 'Error fetching response.';
+                    updateStatus('Error');
+                 }
+                 isProcessing = false;
+                 setButtonProcessing(false);
+                 if (isSessionActive && !isListening) {
+                     startRecognition();
+                 }
+            } finally {
+                abortController = null;
+            }
+        }
+
+        function cancelGeminiCall() {
+            if (abortController) {
+                console.log("Aborting Gemini API call...");
+                abortController.abort();
+                abortController = null;
+            }
+        }
+
+        // --- Text-to-Speech (Using ElevenLabs) ---
+        async function speakText(text) {
+            if (!ELEVENLABS_API_KEY) {
+                showError("ElevenLabs API Key is missing in the code.");
+                isProcessing = false;
+                setButtonProcessing(false);
+                if (isSessionActive && !isListening) startRecognition();
+                return;
+            }
+            if (!text.trim() || !isSessionActive) {
+                console.log('ElevenLabs TTS skipped (no text or session ended).');
+                isProcessing = false;
+                setButtonProcessing(false);
+                 if (isSessionActive && !isListening) {
+                     updateStatus("Listening...");
+                     startRecognition();
+                 }
+                return;
+            }
+
+            // Determine which voice ID to use based on the *input* language
+            const voiceId = ELEVENLABS_VOICE_IDS[currentSttLang] || ELEVENLABS_VOICE_IDS["en-US"]; // Default to English if mapping fails
+            const elevenLabsApiUrl = ELEVENLABS_API_BASE_URL + voiceId; // Construct URL dynamically
+
+            console.log(`Requesting speech from ElevenLabs (Voice ID: ${voiceId})...`);
+            isSpeaking = true;
+            setButtonSpeaking(true);
+            updateStatus('Generating audio...');
+
+            const payload = {
+                text: text,
+                model_id: "eleven_multilingual_v2", // Use a model that supports both languages
+                voice_settings: {
+                    stability: 0.5,
+                    similarity_boost: 0.75,
+                }
+            };
+
+            try {
+                const response = await fetch(elevenLabsApiUrl, { // Use the dynamically constructed URL
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'xi-api-key': ELEVENLABS_API_KEY,
+                        'Accept': 'audio/mpeg'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    let errorBody = `ElevenLabs API Error: ${response.status} ${response.statusText}`;
+                    try {
+                        const errorJson = await response.json();
+                        errorBody += ` - ${errorJson.detail?.message || JSON.stringify(errorJson.detail)}`;
+                    } catch (e) {
+                        const textError = await response.text();
+                        errorBody += ` - ${textError}`;
+                    }
+                    if (response.status === 401) { errorBody = "Invalid ElevenLabs API Key."; }
+                    else if (response.status === 429) { errorBody = "ElevenLabs API Quota Exceeded or Rate Limited."; }
+                    throw new Error(errorBody);
+                }
+
+                const audioBlob = await response.blob();
+                if (currentAudioObjectURL) { URL.revokeObjectURL(currentAudioObjectURL); }
+                currentAudioObjectURL = URL.createObjectURL(audioBlob);
+                audioPlayer.src = currentAudioObjectURL;
+                updateStatus('Speaking...');
+                audioPlayer.play();
+
+            } catch (error) {
+                console.error('Error calling ElevenLabs API or playing audio:', error);
+                showError(`ElevenLabs Error: ${error.message}`);
+                isSpeaking = false;
+                isProcessing = false;
+                setButtonSpeaking(false);
+                if (isSessionActive) {
+                    updateStatus("Error during audio generation. Listening...");
+                    startRecognition();
+                }
+            }
+        }
+
+
+        // --- UI Updates ---
+        function updateStatus(message) {
+            if ((isProcessing || isSpeaking) && (message.includes("Listening") || message.includes("Ready"))) {
+               // Don't overwrite
+            } else {
+                statusDiv.textContent = message;
+            }
+        }
+
+        function showError(message) {
+            errorOutput.textContent = message;
+            errorOutput.classList.remove('hidden');
+            console.error("Error Displayed:", message);
+        }
+
+        function hideError() {
+            errorOutput.classList.add('hidden');
+            errorOutput.textContent = '';
+        }
+
+        function setButtonProcessing(processing, text = 'Processing...') {
+             sessionButton.disabled = processing || isSpeaking;
+             if (processing && !isSpeaking) {
+                 sessionButton.classList.remove('speaking');
+                 sessionButton.classList.add('processing');
+                 sessionButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> ${text}`;
+             } else if (!processing && !isSpeaking && isSessionActive) {
+                 sessionButton.classList.remove('processing', 'speaking');
+                 sessionButton.innerHTML = '<i class="fas fa-stop mr-2"></i> End Session';
+                 sessionButton.classList.add('active-session');
+                 sessionButton.disabled = false;
+             } else if (!isSessionActive) {
+                 sessionButton.classList.remove('processing', 'speaking', 'active-session');
+                 sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
+                 sessionButton.classList.add('bg-green-500', 'hover:bg-green-600');
+                 sessionButton.disabled = false;
+             }
+        }
+
+         function setButtonSpeaking(speaking) {
+             sessionButton.disabled = speaking || isProcessing;
+             if (speaking) {
+                 sessionButton.classList.remove('processing');
+                 sessionButton.classList.add('speaking');
+                 sessionButton.innerHTML = `<i class="fas fa-volume-up mr-2"></i> Speaking...`;
+             } else {
+                 sessionButton.classList.remove('speaking');
+                 if (isProcessing) {
+                     setButtonProcessing(true);
+                 } else if (isSessionActive) {
+                     sessionButton.innerHTML = '<i class="fas fa-stop mr-2"></i> End Session';
+                     sessionButton.classList.add('active-session');
+                     sessionButton.disabled = false;
+                 } else {
+                    sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
+                    sessionButton.classList.add('bg-green-500', 'hover:bg-green-600');
+                    sessionButton.disabled = false;
+                 }
+             }
+        }
+    </script>
+</body>
+</html>
