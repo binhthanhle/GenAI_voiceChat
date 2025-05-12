@@ -186,7 +186,7 @@
         const transcriptionOutput = document.getElementById('transcriptionOutput');
         const geminiSection = document.getElementById('geminiSection');
         const geminiOutput = document.getElementById('geminiOutput');
-        const errorOutput = document.getElementById('errorOutput');
+        const errorOutput = document.getElementById('errorOutput'); // Still used for hiding/showing logic if needed elsewhere
         const apiKeyInput = document.getElementById('apiKeyInput'); // Gemini Key
         const sttLanguageSelect = document.getElementById('sttLanguage');
         const audioPlayer = document.getElementById('audioPlayer');
@@ -223,7 +223,9 @@
 
         // --- Initialization ---
         if (!SpeechRecognition) {
-            showError("Your browser doesn't support the Web Speech Recognition API. Try Chrome or Edge.");
+            // Log error but don't show in UI
+            console.error("Your browser doesn't support the Web Speech Recognition API. Try Chrome or Edge.");
+            updateStatus("Speech Recognition not supported by browser."); // Inform user via status
             sessionButton.disabled = true;
             sessionButton.classList.add('opacity-50', 'cursor-not-allowed');
         } else {
@@ -242,10 +244,9 @@
         });
 
         apiKeyInput.addEventListener('input', () => {
-            if (errorOutput.textContent.includes("API Key")) {
-                hideError();
-                if (!isSessionActive) updateStatus('Ready to start session');
-            }
+            // No need to check errorOutput text content anymore
+            hideError(); // Still hide the (now unused) error div
+            if (!isSessionActive) updateStatus('Ready to start session');
          });
 
         // Audio Player Listeners
@@ -298,22 +299,28 @@
         function startSession() {
             const apiKey = apiKeyInput.value.trim();
             if (!apiKey) {
-                showError("Please enter your Gemini API Key above.");
+                // Log error but don't show in UI
+                console.error("Gemini API Key missing.");
+                updateStatus("Please enter Gemini API Key."); // Use status instead of error div
                 apiKeyInput.focus();
                 return;
             }
              if (!ELEVENLABS_API_KEY) {
-                showError("ElevenLabs API Key is missing in the code.");
+                // Log error but don't show in UI
+                console.error("ElevenLabs API Key is missing in the code.");
+                updateStatus("Configuration error (ElevenLabs)."); // Use status instead of error div
                 return;
             }
             if (!recognition) {
-                 showError("Speech recognition not available.");
+                 // Log error but don't show in UI
+                 console.error("Speech recognition not available.");
+                 updateStatus("Speech recognition not available."); // Use status instead of error div
                  return;
             }
 
             console.log("Attempting to start session...");
             finalTranscript = '';
-            hideError();
+            hideError(); // Keep this to ensure the div is hidden
             updateStatus("Requesting microphone access...");
             initialStartAttempt = true;
             startRecognition();
@@ -415,10 +422,12 @@
                             sessionButton.disabled = false;
                         } else if (isSessionActive) {
                             endSession();
-                            showError("Mic error. Session ended.");
+                            // showError("Mic error. Session ended."); // Don't show error
+                            updateStatus("Mic error. Session ended.");
                         }
                     } else {
-                         showError("Could not start listening. Microphone issue?");
+                         // showError("Could not start listening. Microphone issue?"); // Don't show error
+                         updateStatus("Could not start listening. Microphone issue?");
                          if (initialStartAttempt) {
                              initialStartAttempt = false;
                              updateStatus("Failed to start. Try again.");
@@ -491,13 +500,13 @@
             isListening = false;
             clearTimeout(silenceTimeout);
             console.error('Speech recognition error:', event.error, 'Message:', event.message);
-            let errorMessage = `Recognition Error: ${event.error}`;
+            let statusMessage = `Recognition Error: ${event.error}`; // Use status for feedback
 
             const wasInitialAttempt = initialStartAttempt;
             initialStartAttempt = false;
 
             if (event.error === 'not-allowed') {
-                errorMessage = "Microphone access denied. Please allow access in browser settings.";
+                statusMessage = "Microphone access denied. Please allow access in browser settings.";
                 if (wasInitialAttempt) {
                     updateStatus("Permission denied. Session not started.");
                     sessionButton.disabled = false;
@@ -506,20 +515,23 @@
                 }
             } else if (event.error === 'no-speech') {
                  console.log("No speech detected, will restart if session active.");
-                 return;
+                 return; // Exit without updating status or ending session
             } else if (event.error === 'audio-capture') {
-                errorMessage = "Microphone Error. Check connection/permissions.";
+                statusMessage = "Microphone Error. Check connection/permissions.";
                 endSession();
             } else if (event.error === 'network') {
-                 errorMessage = "Network error during speech recognition. Check connection.";
+                 statusMessage = "Network error during speech recognition. Check connection.";
+                 // Let onend handle restart
             } else if (event.error === 'service-not-allowed') {
-                 errorMessage = "Speech recognition service denied. Check browser/OS settings.";
+                 statusMessage = "Speech recognition service denied. Check browser/OS settings.";
                  endSession();
             } else {
-                 errorMessage = `Recognition Error: ${event.error}. Please try restarting the session.`;
+                 statusMessage = `Recognition Error: ${event.error}. Please try restarting the session.`;
+                 // Let onend handle restart
             }
 
-            showError(errorMessage);
+            updateStatus(statusMessage); // Update status instead of showing error
+            // showError(errorMessage); // Don't show in error div
             if (wasInitialAttempt && event.error !== 'not-allowed') {
                  updateStatus("Failed to start microphone.");
                  sessionButton.disabled = false;
@@ -557,7 +569,8 @@
 
             const apiKey = apiKeyInput.value.trim();
             if (!apiKey) {
-                showError("Error: Gemini API Key is missing.");
+                // showError("Error: Gemini API Key is missing."); // Don't show error
+                updateStatus("Error: Gemini API Key missing.");
                 endSession();
                 return;
             }
@@ -608,7 +621,7 @@
                            } else { specificError += ` Details: ${errorBody}`; }
                         } else { specificError += ` Details: ${errorBody}`; }
                     } catch (parseError) { specificError += ` Details: ${errorBody}`; }
-                    throw new Error(specificError);
+                    throw new Error(specificError); // Still throw to catch block below
                 }
 
                 const reader = response.body.getReader();
@@ -656,9 +669,10 @@
                     geminiOutput.textContent = 'Cancelled.';
                  } else {
                     console.error('Error calling Gemini API:', error);
-                    showError(`${error.message}`);
+                    // showError(`${error.message}`); // Don't show error
+                    updateStatus(`Gemini API Error. Check console.`); // Use status
                     geminiOutput.textContent = 'Error fetching response.';
-                    updateStatus('Error');
+                    // updateStatus('Error'); // Keep specific status
                  }
                  isProcessing = false;
                  setButtonProcessing(false);
@@ -729,24 +743,21 @@
                 });
 
                 if (!response.ok) {
-                    // Try to get specific error, but don't throw if it fails
                     let errorDetail = `ElevenLabs API Error: ${response.status} ${response.statusText}`;
                     try {
                         const errorJson = await response.json();
                         errorDetail += ` - ${errorJson.detail?.message || JSON.stringify(errorJson.detail)}`;
                     } catch (e) {
-                        try { // Try reading as text if JSON fails
+                        try {
                            const textError = await response.text();
                            errorDetail += ` - ${textError}`;
-                        } catch (textE) { /* ignore further errors */ }
+                        } catch (textE) { /* ignore */ }
                     }
-                    // Don't throw, just log and fallback
                     handleTTSFallback(`ElevenLabs API request failed: ${errorDetail}`);
-                    return; // Stop further processing in this function
+                    return;
                 }
 
                 const audioBlob = await response.blob();
-                // Check if blob is valid audio (basic check)
                 if (!audioBlob || audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) {
                      handleTTSFallback(`Received invalid audio data from ElevenLabs (Type: ${audioBlob?.type}, Size: ${audioBlob?.size}). Skipping TTS.`);
                      return;
@@ -757,40 +768,39 @@
                 audioPlayer.src = currentAudioObjectURL;
                 updateStatus('Speaking...');
                 audioPlayer.play().catch(playError => {
-                    // Handle potential errors during play() initiation
                     handleTTSFallback(`Error initiating audio playback: ${playError}. Skipping TTS.`);
                 });
-                // Playback completion/error handled by audioPlayer listeners
 
             } catch (error) {
-                // Catch network errors or other unexpected issues during fetch
                 handleTTSFallback(`Error fetching or processing ElevenLabs audio: ${error}. Skipping TTS.`);
             }
-            // Note: isProcessing/isSpeaking flags are reset in audioPlayer event handlers OR in handleTTSFallback
         }
 
 
         // --- UI Updates ---
-        // UI update functions remain the same
         function updateStatus(message) {
-            if ((isProcessing || isSpeaking) && (message.includes("Listening") || message.includes("Ready"))) {
-               // Don't overwrite
-            } else {
-                statusDiv.textContent = message;
-            }
+            // Allow status updates even if processing/speaking, but prioritize those states if applicable
+            statusDiv.textContent = message;
+             if (isProcessing && !isSpeaking) {
+                 statusDiv.textContent = "Asking Gemini..."; // Or more specific processing status
+             } else if (isSpeaking) {
+                 statusDiv.textContent = "Speaking..."; // Or "Generating audio..."
+             }
         }
 
+        // Modified showError to only log to console
         function showError(message) {
-            errorOutput.textContent = message;
-            errorOutput.classList.remove('hidden');
-            console.error("Error Displayed:", message);
+            console.error("Error occurred:", message);
+            // errorOutput.textContent = message; // Don't update UI
+            // errorOutput.classList.remove('hidden'); // Don't show UI element
         }
 
         function hideError() {
-            errorOutput.classList.add('hidden');
-            errorOutput.textContent = '';
+            // errorOutput.classList.add('hidden'); // Keep hidden
+            // errorOutput.textContent = ''; // Clear just in case
         }
 
+        // setButtonProcessing and setButtonSpeaking remain the same
         function setButtonProcessing(processing, text = 'Processing...') {
              sessionButton.disabled = processing || isSpeaking;
              if (processing && !isSpeaking) {
