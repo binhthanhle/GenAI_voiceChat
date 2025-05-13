@@ -503,7 +503,6 @@
                     if (currentUserQueryBubble) {
                         currentUserQueryBubble.querySelector('.message-content').textContent = queryToSend;
                     } else {
-                        // This case is unlikely if onresult has been firing
                         addMessageToChat(queryToSend, 'user');
                     }
                     sendToGemini(queryToSend);
@@ -573,33 +572,36 @@
 
             clearTimeout(silenceTimeout);
 
-            let currentInterimTranscript = '';
-            let newFinalTextThisEvent = '';
+            let interimTranscriptThisEvent = '';
+            let newlyFinalizedTextThisEvent = ''; // Store only newly finalized text from *this* event
 
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 const transcriptPart = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
-                    newFinalTextThisEvent += transcriptPart.trim() + ' ';
+                    newlyFinalizedTextThisEvent += transcriptPart.trim() + ' ';
                 } else {
-                    currentInterimTranscript += transcriptPart;
+                    interimTranscriptThisEvent += transcriptPart;
                 }
             }
 
-            // Append newly finalized text to the aggregated final text for this utterance
-            if (newFinalTextThisEvent) {
-                currentUtteranceAggregatedFinalText += newFinalTextThisEvent;
+            // Append newly finalized text to the ongoing utterance's final transcript
+            if (newlyFinalizedTextThisEvent) {
+                currentUtteranceAggregatedFinalText += newlyFinalizedTextThisEvent;
             }
 
             // Display combines the aggregated final parts of the current utterance with the current interim part
-            const liveDisplayQuery = (currentUtteranceAggregatedFinalText + currentInterimTranscript).trim();
+            const liveDisplayQuery = (currentUtteranceAggregatedFinalText + interimTranscriptThisEvent).trim();
 
             if (liveDisplayQuery) {
                 if (!currentUserQueryBubble) {
+                    // Create a new bubble for the start of a new user utterance
                     currentUserQueryBubble = addMessageToChat(liveDisplayQuery, 'user');
                 } else {
+                    // Update the existing bubble for the current utterance
                     currentUserQueryBubble.querySelector('.message-content').textContent = liveDisplayQuery;
                 }
                 chatHistory.scrollTop = chatHistory.scrollHeight;
+                // Set a new silence timeout
                 silenceTimeout = setTimeout(handleSilenceTimeout, SILENCE_TIMEOUT_MS);
             }
         }
@@ -611,17 +613,16 @@
              if (queryToSend) {
                  console.log(`Silence timeout (${SILENCE_TIMEOUT_MS}ms) detected. Sending: "${queryToSend}"`);
                  if (currentUserQueryBubble) {
-                     currentUserQueryBubble.querySelector('.message-content').textContent = queryToSend; // Ensure final text is in bubble
+                     currentUserQueryBubble.querySelector('.message-content').textContent = queryToSend;
                  } else {
-                     // This case should be rare if onresult is creating the bubble
-                     addMessageToChat(queryToSend, 'user');
+                     addMessageToChat(queryToSend, 'user'); // Fallback, should have bubble
                  }
                  sendToGemini(queryToSend);
                  currentUtteranceAggregatedFinalText = '';
                  currentUserQueryBubble = null;
              } else {
                  console.log("Silence timeout detected, but no final transcript to send.");
-                 currentUtteranceAggregatedFinalText = ''; // Reset if empty
+                 currentUtteranceAggregatedFinalText = '';
                  currentUserQueryBubble = null;
                  if(isSessionActive && !isListening && !isProcessing && !isSpeaking) {
                     startRecognition();
@@ -696,17 +697,9 @@
             if (!queryText || isProcessing || isSpeaking) {
                 console.log("Send request ignored (empty query or already busy).");
                 if (!queryText && currentUserQueryBubble) {
-                    // If query is empty after all, but a bubble was made for interim, remove it.
-                    // Or, if the bubble was based on currentUtteranceAggregatedFinalText which is now empty,
-                    // it means it was just interim that didn't become final.
-                    // This logic might need refinement based on how currentUserQueryBubble is managed.
-                    // For now, if queryText is empty, we assume the bubble should not persist if it was for this query.
-                    // However, addMessageToChat is called *before* sendToGemini in handleSilenceTimeout,
-                    // so the bubble for the user's query is already there.
-                    // We should only reset currentUserQueryBubble here.
                     currentUserQueryBubble = null;
                 }
-                currentUtteranceAggregatedFinalText = ''; // Ensure this is cleared
+                currentUtteranceAggregatedFinalText = ''; // Ensure this is cleared if query is empty
                 return;
             }
 
@@ -727,7 +720,7 @@
             setButtonProcessing(true, 'Gemini...');
             updateStatus('Asking Gemini...');
             let accumulatedGeminiResponse = '';
-            // currentUtteranceAggregatedFinalText and currentUserQueryBubble are reset by the calling function
+            // currentUtteranceAggregatedFinalText and currentUserQueryBubble are reset by the calling function (handleSilenceTimeout or onspeechend)
 
             currentGeminiMessageElement = addMessageToChat("...", 'gemini');
 
@@ -932,21 +925,21 @@
             icon.classList.add('fas', sender === 'user' ? 'fa-user' : 'fa-robot');
             icon.classList.add(sender === 'user' ? 'text-blue-600' : 'text-gray-500');
 
-            const contentDiv = document.createElement('div'); // Use a div for content
+            const contentDiv = document.createElement('div');
             contentDiv.classList.add('message-content');
 
             if (sender === 'user' || text === "..." || text.startsWith("(") ) {
-                contentDiv.textContent = text; // For user messages or placeholders, use textContent
-            } else { // For Gemini responses, parse Markdown
-                // Ensure Marked.js and DOMPurify are loaded and available
+                contentDiv.textContent = text;
+            } else {
                 if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
                     const unsafeHtml = marked.parse(text);
                     contentDiv.innerHTML = DOMPurify.sanitize(unsafeHtml);
                 } else {
                     console.error("Marked.js or DOMPurify not loaded. Displaying raw text.");
-                    contentDiv.textContent = text; // Fallback to raw text
+                    contentDiv.textContent = text;
                 }
             }
+
 
             messageDiv.appendChild(icon);
             messageDiv.appendChild(contentDiv);
