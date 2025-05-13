@@ -3,12 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Speech -> Gemini -> Speech (ElevenLabs TTS)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Speech -> Gemini Chatbot (ElevenLabs TTS)</title> <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        /* Styles remain the same */
         body {
             font-family: 'Inter', sans-serif;
             display: flex;
@@ -16,40 +14,75 @@
             align-items: center;
             min-height: 100vh;
             background-color: #f3f4f6;
-            padding: 2rem; /* Added padding top/bottom */
+            padding: 1rem; /* Reduced padding */
         }
         .app-container {
             background-color: white;
-            padding: 2rem;
+            padding: 1.5rem; /* Adjusted padding */
             border-radius: 1rem;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            width: 90%;
-            max-width: 700px; /* Increased max-width */
+            width: 95%; /* Increased width */
+            max-width: 800px; /* Increased max-width */
             text-align: center;
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 4rem); /* Adjust height to fill viewport minus padding */
+            max-height: 90vh; /* Limit max height */
         }
         .status-indicator {
             min-height: 1.5rem;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem; /* Reduced margin */
             font-style: italic;
             color: #6b7280;
             font-weight: 500;
         }
-        .output-box {
+         /* Chat History Container */
+        #chatHistory {
+            flex-grow: 1; /* Allow chat history to take available space */
+            overflow-y: auto; /* Enable scrolling */
+            padding: 1rem;
             background-color: #f9fafb;
             border: 1px solid #e5e7eb;
             border-radius: 0.5rem;
-            padding: 1rem;
-            margin-top: 0.5rem;
-            text-align: left;
-            min-height: 80px; /* Increased min-height */
-            overflow-y: auto;
-            max-height: 250px; /* Increased max-height */
+            margin-bottom: 1rem; /* Space below chat */
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem; /* Space between messages */
         }
+        /* Individual Chat Message Bubbles */
+        .message-bubble {
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem; /* More rounded */
+            max-width: 80%; /* Limit width of bubbles */
+            word-wrap: break-word; /* Break long words */
+            display: flex;
+            align-items: flex-start; /* Align icon with top of text */
+            gap: 0.5rem;
+        }
+        .message-bubble.user {
+            background-color: #dbeafe; /* Light blue for user */
+            color: #1e40af;
+            align-self: flex-end; /* Align user messages to the right */
+            border-bottom-right-radius: 0.25rem; /* Slightly flatten corner */
+        }
+        .message-bubble.gemini {
+            background-color: #e5e7eb; /* Light gray for gemini */
+            color: #374151;
+            align-self: flex-start; /* Align gemini messages to the left */
+            border-bottom-left-radius: 0.25rem; /* Slightly flatten corner */
+        }
+         .message-bubble i {
+            margin-top: 0.125rem; /* Align icon slightly better */
+         }
+         .message-bubble p {
+             margin: 0; /* Remove default paragraph margin */
+         }
         .session-button {
             transition: all 0.3s ease;
             padding: 0.75rem 1.5rem;
             font-size: 1rem;
             min-width: 150px;
+            margin-top: auto; /* Push button towards bottom if space allows */
         }
         .session-button:hover:not(:disabled) {
             transform: scale(1.05);
@@ -67,15 +100,9 @@
             cursor: not-allowed;
         }
          .session-button.speaking {
-            background-color: #3b82f6; /* Blue for speaking phase */
+            background-color: #3b82f6;
             color: white;
             cursor: not-allowed;
-        }
-        h2 {
-            margin-top: 1rem;
-            margin-bottom: 0.25rem;
-            font-weight: 600;
-            color: #1f2937;
         }
         label {
             font-weight: 600;
@@ -105,9 +132,9 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            padding: 1rem;
+            gap: 0.75rem; /* Reduced gap */
+            margin-bottom: 1rem; /* Reduced margin */
+            padding: 0.75rem; /* Reduced padding */
             background-color: #f9fafb;
             border-radius: 0.5rem;
             border: 1px solid #e5e7eb;
@@ -139,10 +166,7 @@
 </head>
 <body>
     <div class="app-container">
-        <h1 class="text-2xl font-bold mb-4 text-gray-800">Speech -> Gemini -> Speech</h1>
-        <p class="text-gray-600 mb-6">Enter API Key, select language, start session. Speak your query. Pausing sends the query. Uses ElevenLabs for voice.</p>
-
-        <div class="config-section">
+        <h1 class="text-xl font-bold mb-3 text-gray-800">Speech -> Gemini Chatbot</h1> <div class="config-section">
              <div class="config-row">
                 <label for="apiKeyInput">Gemini API Key:</label>
                 <input type="password" id="apiKeyInput" placeholder="Enter your Gemini API key" class="flex-grow">
@@ -153,40 +177,34 @@
                      <option value="en-US" selected>English (US)</option>
                      <option value="vi-VN">Vietnamese</option>
                  </select>
-                 </div>
+             </div>
         </div>
 
-        <button id="sessionButton" class="session-button bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-full shadow-md">
+        <div id="status" class="status-indicator">Enter API Key and select language</div>
+
+        <div id="chatHistory">
+            <div class="message-bubble gemini"> <i class="fas fa-robot text-gray-500"></i>
+                 <p>Hi there! Start a session and speak your query.</p>
+             </div>
+        </div>
+
+        <button id="sessionButton" class="session-button bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-full shadow-md mt-4">
             <i class="fas fa-play mr-2"></i> Start Session
         </button>
 
-        <div id="status" class="status-indicator mt-4">Enter API Key and select language</div>
-
-        <div id="transcriptionSection" class="mt-4 hidden">
-            <h2 class="text-lg font-semibold">Your Query:</h2>
-            <div id="transcriptionOutput" class="output-box"></div>
-        </div>
-
-        <div id="geminiSection" class="mt-4 hidden">
-            <h2 class="text-lg font-semibold">Gemini replied:</h2>
-            <div id="geminiOutput" class="output-box"></div>
-        </div>
-
-        <div id="errorOutput" class="mt-4 text-red-600 font-semibold hidden"></div>
-
         <audio id="audioPlayer"></audio>
-
-    </div>
+        </div>
 
     <script>
         // --- DOM Elements ---
         const sessionButton = document.getElementById('sessionButton');
         const statusDiv = document.getElementById('status');
-        const transcriptionSection = document.getElementById('transcriptionSection');
-        const transcriptionOutput = document.getElementById('transcriptionOutput');
-        const geminiSection = document.getElementById('geminiSection');
-        const geminiOutput = document.getElementById('geminiOutput');
-        const errorOutput = document.getElementById('errorOutput'); // Still used for hiding/showing logic if needed elsewhere
+        const chatHistory = document.getElementById('chatHistory'); // Changed
+        // const transcriptionSection = document.getElementById('transcriptionSection'); // Removed
+        // const transcriptionOutput = document.getElementById('transcriptionOutput'); // Removed
+        // const geminiSection = document.getElementById('geminiSection'); // Removed
+        // const geminiOutput = document.getElementById('geminiOutput'); // Removed
+        // const errorOutput = document.getElementById('errorOutput'); // Removed (or keep for logging only)
         const apiKeyInput = document.getElementById('apiKeyInput'); // Gemini Key
         const sttLanguageSelect = document.getElementById('sttLanguage');
         const audioPlayer = document.getElementById('audioPlayer');
@@ -209,8 +227,8 @@
         let isProcessing = false;
         let isSpeaking = false;
         let recognition;
-        let finalTranscript = '';
-        let accumulatedGeminiResponse = '';
+        let finalTranscript = ''; // Accumulates user query
+        let currentGeminiMessageElement = null; // To stream response into a bubble
         let currentSttLang = sttLanguageSelect.value;
         let abortController = null;
         let restartTimer = null;
@@ -223,9 +241,8 @@
 
         // --- Initialization ---
         if (!SpeechRecognition) {
-            // Log error but don't show in UI
             console.error("Your browser doesn't support the Web Speech Recognition API. Try Chrome or Edge.");
-            updateStatus("Speech Recognition not supported by browser."); // Inform user via status
+            updateStatus("Speech Recognition not supported by browser.");
             sessionButton.disabled = true;
             sessionButton.classList.add('opacity-50', 'cursor-not-allowed');
         } else {
@@ -244,8 +261,7 @@
         });
 
         apiKeyInput.addEventListener('input', () => {
-            // No need to check errorOutput text content anymore
-            hideError(); // Still hide the (now unused) error div
+            // hideError(); // No error div to hide
             if (!isSessionActive) updateStatus('Ready to start session');
          });
 
@@ -269,9 +285,8 @@
 
         audioPlayer.onerror = (e) => {
             console.error('Audio player error:', e);
-            // Don't show error to user here, handled in speakText fallback
             isSpeaking = false;
-            isProcessing = false; // Ensure processing stops on player error
+            isProcessing = false;
             setButtonSpeaking(false);
 
             if (currentAudioObjectURL) {
@@ -280,14 +295,13 @@
             }
 
             if (isSessionActive) {
-                updateStatus("Audio playback error. Listening..."); // Informative status
+                updateStatus("Audio playback error. Listening...");
                 startRecognition();
             }
         };
 
 
         // --- Session Management ---
-        // toggleSession, startSession, endSession remain the same
         function toggleSession() {
             if (isSessionActive) {
                 endSession();
@@ -299,30 +313,29 @@
         function startSession() {
             const apiKey = apiKeyInput.value.trim();
             if (!apiKey) {
-                // Log error but don't show in UI
                 console.error("Gemini API Key missing.");
-                updateStatus("Please enter Gemini API Key."); // Use status instead of error div
+                updateStatus("Please enter Gemini API Key.");
                 apiKeyInput.focus();
                 return;
             }
              if (!ELEVENLABS_API_KEY) {
-                // Log error but don't show in UI
                 console.error("ElevenLabs API Key is missing in the code.");
-                updateStatus("Configuration error (ElevenLabs)."); // Use status instead of error div
+                updateStatus("Configuration error (ElevenLabs).");
                 return;
             }
             if (!recognition) {
-                 // Log error but don't show in UI
                  console.error("Speech recognition not available.");
-                 updateStatus("Speech recognition not available."); // Use status instead of error div
+                 updateStatus("Speech recognition not available.");
                  return;
             }
 
             console.log("Attempting to start session...");
             finalTranscript = '';
-            hideError(); // Keep this to ensure the div is hidden
+            // hideError();
             updateStatus("Requesting microphone access...");
             initialStartAttempt = true;
+            // Clear chat history on new session start? Optional.
+            // chatHistory.innerHTML = '';
             startRecognition();
         }
 
@@ -349,18 +362,16 @@
             apiKeyInput.disabled = false;
             sttLanguageSelect.disabled = false;
             updateStatus('Session Ended. Ready to start.');
-            transcriptionSection.classList.add('hidden');
-            geminiSection.classList.add('hidden');
+            // transcriptionSection.classList.add('hidden'); // Removed
+            // geminiSection.classList.add('hidden'); // Removed
             isProcessing = false;
             isSpeaking = false;
             finalTranscript = '';
+            currentGeminiMessageElement = null;
         }
 
 
         // --- Speech Recognition Control ---
-        // setupSpeechRecognition, startRecognition, stopRecognition,
-        // handleRecognitionResult, handleSilenceTimeout, handleRecognitionError,
-        // handleRecognitionEnd remain the same
         function setupSpeechRecognition() {
             recognition = new SpeechRecognition();
             recognition.continuous = true;
@@ -402,10 +413,8 @@
             clearTimeout(restartTimer);
             clearTimeout(silenceTimeout);
 
-            if (!isProcessing && !isSpeaking) {
-                transcriptionOutput.textContent = '';
-                transcriptionSection.classList.add('hidden');
-            }
+            // Don't clear chat history here, but clear transcript buffer
+            finalTranscript = '';
 
             restartTimer = setTimeout(() => {
                 try {
@@ -422,11 +431,9 @@
                             sessionButton.disabled = false;
                         } else if (isSessionActive) {
                             endSession();
-                            // showError("Mic error. Session ended."); // Don't show error
                             updateStatus("Mic error. Session ended.");
                         }
                     } else {
-                         // showError("Could not start listening. Microphone issue?"); // Don't show error
                          updateStatus("Could not start listening. Microphone issue?");
                          if (initialStartAttempt) {
                              initialStartAttempt = false;
@@ -475,12 +482,12 @@
                 }
             }
 
-            const displayTranscript = finalTranscript + interimForThisEvent;
-            if (displayTranscript.trim()) {
-                transcriptionOutput.textContent = displayTranscript;
-                transcriptionSection.classList.remove('hidden');
-                transcriptionOutput.scrollTop = transcriptionOutput.scrollHeight;
-                silenceTimeout = setTimeout(handleSilenceTimeout, SILENCE_TIMEOUT_MS);
+            // Display interim results in status or a temporary bubble? For now, just log.
+            // console.log('Interim:', interimForThisEvent);
+
+            // Set a new silence timeout if we received some transcript part
+            if (finalTranscript.trim() || interimForThisEvent.trim()) {
+                 silenceTimeout = setTimeout(handleSilenceTimeout, SILENCE_TIMEOUT_MS);
             }
         }
 
@@ -489,6 +496,7 @@
 
              if (finalTranscript.trim()) {
                  console.log(`Silence timeout (${SILENCE_TIMEOUT_MS}ms) detected.`);
+                 addMessageToChat(finalTranscript, 'user'); // Add user message to chat
                  sendToGemini(finalTranscript);
              } else {
                  console.log("Silence timeout detected, but no transcript to send.");
@@ -500,7 +508,7 @@
             isListening = false;
             clearTimeout(silenceTimeout);
             console.error('Speech recognition error:', event.error, 'Message:', event.message);
-            let statusMessage = `Recognition Error: ${event.error}`; // Use status for feedback
+            let statusMessage = `Recognition Error: ${event.error}`;
 
             const wasInitialAttempt = initialStartAttempt;
             initialStartAttempt = false;
@@ -515,6 +523,8 @@
                 }
             } else if (event.error === 'no-speech') {
                  console.log("No speech detected, will restart if session active.");
+                 // Restart immediately if session is active and idle
+                 if(isSessionActive && !isProcessing && !isSpeaking) startRecognition();
                  return; // Exit without updating status or ending session
             } else if (event.error === 'audio-capture') {
                 statusMessage = "Microphone Error. Check connection/permissions.";
@@ -530,8 +540,7 @@
                  // Let onend handle restart
             }
 
-            updateStatus(statusMessage); // Update status instead of showing error
-            // showError(errorMessage); // Don't show in error div
+            updateStatus(statusMessage);
             if (wasInitialAttempt && event.error !== 'not-allowed') {
                  updateStatus("Failed to start microphone.");
                  sessionButton.disabled = false;
@@ -557,7 +566,6 @@
 
 
         // --- Gemini API Call ---
-        // sendToGemini remains the same
         async function sendToGemini(text) {
             clearTimeout(silenceTimeout);
 
@@ -569,7 +577,6 @@
 
             const apiKey = apiKeyInput.value.trim();
             if (!apiKey) {
-                // showError("Error: Gemini API Key is missing."); // Don't show error
                 updateStatus("Error: Gemini API Key missing.");
                 endSession();
                 return;
@@ -584,10 +591,13 @@
             isProcessing = true;
             setButtonProcessing(true, 'Gemini...');
             updateStatus('Asking Gemini...');
-            geminiSection.classList.remove('hidden');
-            geminiOutput.textContent = '...';
-            accumulatedGeminiResponse = '';
-            finalTranscript = ''; // Clear buffer *after* capturing
+            // geminiSection.classList.remove('hidden'); // Removed
+            // geminiOutput.textContent = '...'; // Removed
+            let accumulatedGeminiResponse = ''; // Local scope for response accumulation
+            finalTranscript = ''; // Clear user transcript buffer *after* capturing queryText
+
+            // Create a placeholder message bubble for Gemini's response
+            currentGeminiMessageElement = addMessageToChat("...", 'gemini');
 
             const payload = {
                 contents: [{ role: "user", parts: [{ text: queryText }] }],
@@ -621,12 +631,13 @@
                            } else { specificError += ` Details: ${errorBody}`; }
                         } else { specificError += ` Details: ${errorBody}`; }
                     } catch (parseError) { specificError += ` Details: ${errorBody}`; }
-                    throw new Error(specificError); // Still throw to catch block below
+                    throw new Error(specificError);
                 }
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
+                let firstChunk = true;
 
                 while (true) {
                     const { value, done } = await reader.read();
@@ -640,42 +651,64 @@
                                 const jsonData = JSON.parse(line.substring(6));
                                 const textPart = jsonData?.candidates?.[0]?.content?.parts?.[0]?.text;
                                 if (textPart) {
-                                    accumulatedGeminiResponse += textPart;
-                                    geminiOutput.textContent = accumulatedGeminiResponse;
-                                    geminiOutput.scrollTop = geminiOutput.scrollHeight;
+                                    if (firstChunk && currentGeminiMessageElement) {
+                                        // Replace "..." with the first chunk
+                                        currentGeminiMessageElement.querySelector('p').textContent = textPart;
+                                        firstChunk = false;
+                                    } else if (currentGeminiMessageElement) {
+                                        // Append subsequent chunks
+                                        currentGeminiMessageElement.querySelector('p').textContent += textPart;
+                                    }
+                                    accumulatedGeminiResponse += textPart; // Still accumulate full response
+                                    chatHistory.scrollTop = chatHistory.scrollHeight; // Scroll as content streams
                                 }
                             } catch (e) { console.warn('Error parsing SSE chunk:', e); }
                         }
                     }
                 }
+                 // Process final buffer if necessary
                  if (buffer.startsWith('data: ')) {
                      try {
                          const jsonData = JSON.parse(buffer.substring(6));
                          const textPart = jsonData?.candidates?.[0]?.content?.parts?.[0]?.text;
-                         if (textPart) { accumulatedGeminiResponse += textPart; geminiOutput.textContent = accumulatedGeminiResponse; }
+                         if (textPart && currentGeminiMessageElement) {
+                             if (firstChunk) {
+                                 currentGeminiMessageElement.querySelector('p').textContent = textPart;
+                             } else {
+                                 currentGeminiMessageElement.querySelector('p').textContent += textPart;
+                             }
+                             accumulatedGeminiResponse += textPart;
+                             chatHistory.scrollTop = chatHistory.scrollHeight;
+                         }
                      } catch (e) { console.warn('Error parsing final SSE buffer:', e); }
                  }
 
-                console.log('Gemini Response Complete:', accumulatedGeminiResponse.substring(0,100)+"...");
-                 if (!accumulatedGeminiResponse.trim()) {
-                    geminiOutput.textContent = "(No text response from Gemini)";
+                 // Handle cases where Gemini might return no text content
+                 if (firstChunk && currentGeminiMessageElement) { // If no text parts were received
+                     currentGeminiMessageElement.querySelector('p').textContent = "(No text response)";
                  }
+
+                console.log('Gemini Response Complete:', accumulatedGeminiResponse.substring(0,100)+"...");
+                currentGeminiMessageElement = null; // Reset current message element
                 speakText(accumulatedGeminiResponse || "Gemini did not reply.");
 
             } catch (error) {
                  if (error.name === 'AbortError') {
                     console.log('Gemini fetch aborted.');
                     updateStatus('Call cancelled.');
-                    geminiOutput.textContent = 'Cancelled.';
+                    if (currentGeminiMessageElement) {
+                        currentGeminiMessageElement.querySelector('p').textContent = "(Cancelled)";
+                    }
                  } else {
                     console.error('Error calling Gemini API:', error);
-                    // showError(`${error.message}`); // Don't show error
-                    updateStatus(`Gemini API Error. Check console.`); // Use status
-                    geminiOutput.textContent = 'Error fetching response.';
-                    // updateStatus('Error'); // Keep specific status
+                    updateStatus(`Gemini API Error. Check console.`);
+                    if (currentGeminiMessageElement) {
+                        currentGeminiMessageElement.querySelector('p').textContent = "(Error fetching response)";
+                    }
                  }
                  isProcessing = false;
                  setButtonProcessing(false);
+                 currentGeminiMessageElement = null;
                  if (isSessionActive && !isListening) {
                      startRecognition();
                  }
@@ -694,20 +727,17 @@
 
         // --- Text-to-Speech (Using ElevenLabs with Fallback) ---
         async function speakText(text) {
-            // --- Fallback Function ---
             const handleTTSFallback = (logMessage) => {
                 console.warn(logMessage);
-                // Don't show error to user, just proceed without audio
                 isSpeaking = false;
-                isProcessing = false; // Reset processing flag as TTS part failed/skipped
-                setButtonSpeaking(false); // Update button state
+                isProcessing = false;
+                setButtonSpeaking(false);
                 if (isSessionActive && !isListening) {
-                    updateStatus("Listening..."); // Update status
-                    startRecognition(); // Restart listening
+                    updateStatus("Listening...");
+                    startRecognition();
                 }
             };
 
-            // --- Main TTS Logic ---
             if (!ELEVENLABS_API_KEY) {
                 handleTTSFallback("ElevenLabs API Key missing. Skipping TTS.");
                 return;
@@ -721,9 +751,9 @@
             const elevenLabsApiUrl = ELEVENLABS_API_BASE_URL + voiceId;
 
             console.log(`Requesting speech from ElevenLabs (Voice ID: ${voiceId})...`);
-            isSpeaking = true; // Assume we will speak initially
+            isSpeaking = true;
             setButtonSpeaking(true);
-            updateStatus('Generating audio...');
+            updateStatus('Generating audio...'); // Keep processing true
 
             const payload = {
                 text: text,
@@ -744,15 +774,8 @@
 
                 if (!response.ok) {
                     let errorDetail = `ElevenLabs API Error: ${response.status} ${response.statusText}`;
-                    try {
-                        const errorJson = await response.json();
-                        errorDetail += ` - ${errorJson.detail?.message || JSON.stringify(errorJson.detail)}`;
-                    } catch (e) {
-                        try {
-                           const textError = await response.text();
-                           errorDetail += ` - ${textError}`;
-                        } catch (textE) { /* ignore */ }
-                    }
+                    try { const errorJson = await response.json(); errorDetail += ` - ${errorJson.detail?.message || JSON.stringify(errorJson.detail)}`; }
+                    catch (e) { try { const textError = await response.text(); errorDetail += ` - ${textError}`; } catch (textE) { /* ignore */ } }
                     handleTTSFallback(`ElevenLabs API request failed: ${errorDetail}`);
                     return;
                 }
@@ -778,11 +801,31 @@
 
 
         // --- UI Updates ---
+        function addMessageToChat(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message-bubble', sender); // 'user' or 'gemini'
+
+            const icon = document.createElement('i');
+            icon.classList.add('fas', sender === 'user' ? 'fa-user' : 'fa-robot');
+            icon.classList.add(sender === 'user' ? 'text-blue-600' : 'text-gray-500'); // Icon colors
+
+            const textP = document.createElement('p');
+            textP.textContent = text;
+
+            messageDiv.appendChild(icon);
+            messageDiv.appendChild(textP);
+            chatHistory.appendChild(messageDiv);
+
+            // Scroll to the bottom
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            return messageDiv; // Return the element reference for streaming updates
+        }
+
         function updateStatus(message) {
-            // Allow status updates even if processing/speaking, but prioritize those states if applicable
             statusDiv.textContent = message;
+             // Keep status consistent with button state if processing/speaking
              if (isProcessing && !isSpeaking) {
-                 statusDiv.textContent = "Asking Gemini..."; // Or more specific processing status
+                 statusDiv.textContent = "Asking Gemini...";
              } else if (isSpeaking) {
                  statusDiv.textContent = "Speaking..."; // Or "Generating audio..."
              }
@@ -791,13 +834,10 @@
         // Modified showError to only log to console
         function showError(message) {
             console.error("Error occurred:", message);
-            // errorOutput.textContent = message; // Don't update UI
-            // errorOutput.classList.remove('hidden'); // Don't show UI element
         }
 
         function hideError() {
-            // errorOutput.classList.add('hidden'); // Keep hidden
-            // errorOutput.textContent = ''; // Clear just in case
+            // No visual error element to hide anymore
         }
 
         // setButtonProcessing and setButtonSpeaking remain the same
