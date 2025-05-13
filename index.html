@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.10/purify.min.js" integrity="sha512-H+rglffZ6f5JvE1SdK3h3uQx2SoeZ4LPAESDDM0oZTxvsLd3B7Lw7FocKnuE0hK23jW/HMMh7hSdK8KjHH0r/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -57,6 +59,7 @@
             display: flex;
             align-items: flex-start;
             gap: 0.5rem;
+            text-align: left; /* Ensure text within bubble is left-aligned */
         }
         .message-bubble.user {
             background-color: #dbeafe;
@@ -71,17 +74,54 @@
             border-bottom-left-radius: 0.25rem;
         }
          .message-bubble i {
-            margin-top: 0.125rem;
+            margin-top: 0.125rem; /* Adjusted for better alignment with text */
+            flex-shrink: 0; /* Prevent icon from shrinking */
          }
-         .message-bubble p {
+         .message-bubble .message-content { /* New class for message content */
              margin: 0;
+             flex-grow: 1; /* Allow content to take remaining space */
          }
-        .action-button { /* Generic class for session and clear buttons */
+         /* Basic Markdown styling for chat bubbles */
+        .message-bubble .message-content p { margin-bottom: 0.5em; }
+        .message-bubble .message-content p:last-child { margin-bottom: 0; }
+        .message-bubble .message-content strong, .message-bubble .message-content b { font-weight: 600; }
+        .message-bubble .message-content em, .message-bubble .message-content i { font-style: italic; }
+        .message-bubble .message-content ul, .message-bubble .message-content ol { margin-left: 1.5em; padding-left: 0.5em; }
+        .message-bubble .message-content li { margin-bottom: 0.25em; }
+        .message-bubble .message-content code {
+            background-color: #f0f0f0;
+            padding: 0.1em 0.3em;
+            border-radius: 0.25em;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+        .message-bubble .message-content pre {
+            background-color: #f0f0f0;
+            padding: 0.5em;
+            border-radius: 0.25em;
+            overflow-x: auto;
+            font-size: 0.9em;
+        }
+        .message-bubble .message-content pre code {
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
+        }
+        .message-bubble .message-content a {
+            color: #2563eb; /* Tailwind blue-600 */
+            text-decoration: underline;
+        }
+        .message-bubble .message-content a:hover {
+            color: #1d4ed8; /* Tailwind blue-700 */
+        }
+
+
+        .action-button {
             transition: all 0.3s ease;
             padding: 0.75rem 1.5rem;
             font-size: 1rem;
             min-width: 150px;
-            border-radius: 9999px; /* pill shape */
+            border-radius: 9999px;
             font-weight: bold;
             color: white;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
@@ -90,30 +130,30 @@
             transform: scale(1.05);
         }
         #sessionButton.active-session {
-            background-color: #ef4444; /* Red for End Session */
+            background-color: #ef4444;
         }
         #sessionButton.active-session:hover {
             background-color: #dc2626;
         }
         #sessionButton:not(.active-session) {
-             background-color: #22c55e; /* Green for Start Session */
+             background-color: #22c55e;
         }
         #sessionButton:not(.active-session):hover {
              background-color: #16a34a;
         }
         #clearSessionButton {
-            background-color: #6b7280; /* Gray for Clear Session */
+            background-color: #6b7280;
         }
         #clearSessionButton:hover {
             background-color: #4b5563;
         }
-        .session-button.processing { /* Combined processing/speaking style */
-            background-color: #f59e0b; /* Amber */
+        .session-button.processing {
+            background-color: #f59e0b;
             color: white;
             cursor: not-allowed;
         }
          .session-button.speaking {
-            background-color: #3b82f6; /* Blue for speaking phase */
+            background-color: #3b82f6;
             color: white;
             cursor: not-allowed;
         }
@@ -178,9 +218,9 @@
         .button-container {
             display: flex;
             justify-content: center;
-            gap: 1rem; /* Space between buttons */
-            margin-top: auto; /* Push buttons to bottom */
-            padding-top: 1rem; /* Add some space above buttons */
+            gap: 1rem;
+            margin-top: auto;
+            padding-top: 1rem;
         }
 
     </style>
@@ -213,7 +253,7 @@
         <div id="chatHistory">
             <div class="message-bubble gemini">
                  <i class="fas fa-robot text-gray-500"></i>
-                 <p>Hi there! Start a session and speak your query.</p>
+                 <div class="message-content"><p>Hi there! Start a session and speak your query.</p></div>
              </div>
         </div>
 
@@ -231,17 +271,17 @@
     <script>
         // --- DOM Elements ---
         const sessionButton = document.getElementById('sessionButton');
-        const clearSessionButton = document.getElementById('clearSessionButton'); // New
+        const clearSessionButton = document.getElementById('clearSessionButton');
         const statusDiv = document.getElementById('status');
         const chatHistory = document.getElementById('chatHistory');
         const apiKeyInput = document.getElementById('apiKeyInput');
         const sttLanguageSelect = document.getElementById('sttLanguage');
-        const silenceTimeoutSelect = document.getElementById('silenceTimeoutSelect'); // New
+        const silenceTimeoutSelect = document.getElementById('silenceTimeoutSelect');
         const audioPlayer = document.getElementById('audioPlayer');
 
         // --- Configuration ---
         const GEMINI_MODEL = "gemini-2.0-flash";
-        let SILENCE_TIMEOUT_MS = parseInt(silenceTimeoutSelect.value); // Initialize from select
+        let SILENCE_TIMEOUT_MS = parseInt(silenceTimeoutSelect.value);
 
         // --- ElevenLabs Configuration ---
         const ELEVENLABS_API_KEY = "sk_c8ea1b9d4af1e1ca4418c9a714553a35fc684f2263ca8521";
@@ -275,7 +315,7 @@
             updateStatus("Speech Recognition not supported by browser.");
             sessionButton.disabled = true;
             sessionButton.classList.add('opacity-50', 'cursor-not-allowed');
-            clearSessionButton.disabled = true; // Disable clear button too
+            clearSessionButton.disabled = true;
             clearSessionButton.classList.add('opacity-50', 'cursor-not-allowed');
         } else {
             setupSpeechRecognition();
@@ -283,7 +323,7 @@
 
         // --- Event Listeners ---
         sessionButton.addEventListener('click', toggleSession);
-        clearSessionButton.addEventListener('click', clearSession); // New listener
+        clearSessionButton.addEventListener('click', clearSession);
 
         sttLanguageSelect.addEventListener('change', (event) => {
             currentSttLang = event.target.value;
@@ -293,13 +333,12 @@
             }
         });
 
-        silenceTimeoutSelect.addEventListener('change', (event) => { // New listener
+        silenceTimeoutSelect.addEventListener('change', (event) => {
             SILENCE_TIMEOUT_MS = parseInt(event.target.value);
             console.log("Silence Timeout changed to:", SILENCE_TIMEOUT_MS);
-            // If a silence timeout is currently active, clear it and potentially start a new one
             if (silenceTimeout) {
                 clearTimeout(silenceTimeout);
-                if (isListening && (finalTranscript.trim() || document.querySelector('.message-bubble.user:last-child p')?.textContent?.trim())) { // Check if there's pending text
+                if (isListening && (finalTranscript.trim() || document.querySelector('.message-bubble.user:last-child .message-content p')?.textContent?.trim())) {
                     silenceTimeout = setTimeout(handleSilenceTimeout, SILENCE_TIMEOUT_MS);
                 }
             }
@@ -309,7 +348,6 @@
             if (!isSessionActive) updateStatus('Ready to start session');
          });
 
-        // Audio Player Listeners
         audioPlayer.onended = () => {
             console.log('Audio finished playing.');
             isSpeaking = false;
@@ -380,7 +418,7 @@
             startRecognition();
         }
 
-        function endSession(isClearing = false) { // Added isClearing parameter
+        function endSession(isClearing = false) {
             console.log("Ending session...");
             isSessionActive = false;
 
@@ -398,13 +436,12 @@
 
             sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
             sessionButton.classList.remove('active-session', 'processing', 'speaking');
-            // sessionButton.classList.add('bg-green-500', 'hover:bg-green-600'); // Style handled by CSS :not(.active-session)
             sessionButton.disabled = false;
             apiKeyInput.disabled = false;
             sttLanguageSelect.disabled = false;
-            silenceTimeoutSelect.disabled = false; // Re-enable silence timeout select
+            silenceTimeoutSelect.disabled = false;
 
-            if (!isClearing) { // Only update status if not part of a clear operation
+            if (!isClearing) {
                 updateStatus('Session Ended. Ready to start.');
             }
 
@@ -414,14 +451,13 @@
             currentGeminiMessageElement = null;
         }
 
-        // New function to clear session
         function clearSession() {
             console.log("Clearing session...");
             if (isSessionActive) {
-                endSession(true); // End the active session, indicating it's part of a clear
+                endSession(true);
             }
-            chatHistory.innerHTML = ''; // Clear chat display
-            addMessageToChat("Session cleared. Ready to start a new conversation.", "gemini"); // Add initial message
+            chatHistory.innerHTML = '';
+            addMessageToChat("Session cleared. Ready to start a new conversation.", "gemini");
             finalTranscript = '';
             currentGeminiMessageElement = null;
             updateStatus('Session Cleared. Ready to start.');
@@ -446,7 +482,7 @@
                     sessionButton.classList.add('active-session');
                     apiKeyInput.disabled = true;
                     sttLanguageSelect.disabled = true;
-                    silenceTimeoutSelect.disabled = true; // Disable silence timeout select
+                    silenceTimeoutSelect.disabled = true;
                 }
 
                  if (!isProcessing && !isSpeaking) {
@@ -641,7 +677,7 @@
             let accumulatedGeminiResponse = '';
             finalTranscript = '';
 
-            currentGeminiMessageElement = addMessageToChat("...", 'gemini');
+            currentGeminiMessageElement = addMessageToChat("...", 'gemini'); // Placeholder
 
             const payload = {
                 contents: [{ role: "user", parts: [{ text: queryText }] }],
@@ -695,38 +731,37 @@
                                 const jsonData = JSON.parse(line.substring(6));
                                 const textPart = jsonData?.candidates?.[0]?.content?.parts?.[0]?.text;
                                 if (textPart) {
-                                    if (firstChunk && currentGeminiMessageElement) {
-                                        currentGeminiMessageElement.querySelector('p').textContent = textPart;
-                                        firstChunk = false;
-                                    } else if (currentGeminiMessageElement) {
-                                        currentGeminiMessageElement.querySelector('p').textContent += textPart;
+                                    accumulatedGeminiResponse += textPart; // Accumulate full response
+                                    if (currentGeminiMessageElement) {
+                                        // Parse accumulated Markdown and sanitize
+                                        const unsafeHtml = marked.parse(accumulatedGeminiResponse);
+                                        currentGeminiMessageElement.querySelector('.message-content').innerHTML = DOMPurify.sanitize(unsafeHtml);
                                     }
-                                    accumulatedGeminiResponse += textPart;
                                     chatHistory.scrollTop = chatHistory.scrollHeight;
                                 }
                             } catch (e) { console.warn('Error parsing SSE chunk:', e); }
                         }
                     }
                 }
+                 // Process final buffer if necessary
                  if (buffer.startsWith('data: ')) {
                      try {
                          const jsonData = JSON.parse(buffer.substring(6));
                          const textPart = jsonData?.candidates?.[0]?.content?.parts?.[0]?.text;
                          if (textPart && currentGeminiMessageElement) {
-                             if (firstChunk) {
-                                 currentGeminiMessageElement.querySelector('p').textContent = textPart;
-                             } else {
-                                 currentGeminiMessageElement.querySelector('p').textContent += textPart;
-                             }
                              accumulatedGeminiResponse += textPart;
+                             const unsafeHtml = marked.parse(accumulatedGeminiResponse);
+                             currentGeminiMessageElement.querySelector('.message-content').innerHTML = DOMPurify.sanitize(unsafeHtml);
                              chatHistory.scrollTop = chatHistory.scrollHeight;
                          }
                      } catch (e) { console.warn('Error parsing final SSE buffer:', e); }
                  }
 
-                 if (firstChunk && currentGeminiMessageElement) {
-                     currentGeminiMessageElement.querySelector('p').textContent = "(No text response)";
+                 // If still "..." it means no text parts were received
+                 if (currentGeminiMessageElement && currentGeminiMessageElement.querySelector('.message-content').innerHTML === "...") {
+                     currentGeminiMessageElement.querySelector('.message-content').textContent = "(No text response)";
                  }
+
 
                 console.log('Gemini Response Complete:', accumulatedGeminiResponse.substring(0,100)+"...");
                 currentGeminiMessageElement = null;
@@ -737,13 +772,13 @@
                     console.log('Gemini fetch aborted.');
                     updateStatus('Call cancelled.');
                     if (currentGeminiMessageElement) {
-                        currentGeminiMessageElement.querySelector('p').textContent = "(Cancelled)";
+                        currentGeminiMessageElement.querySelector('.message-content').textContent = "(Cancelled)";
                     }
                  } else {
                     console.error('Error calling Gemini API:', error);
                     updateStatus(`Gemini API Error. Check console.`);
                     if (currentGeminiMessageElement) {
-                        currentGeminiMessageElement.querySelector('p').textContent = "(Error fetching response)";
+                        currentGeminiMessageElement.querySelector('.message-content').textContent = "(Error fetching response)";
                     }
                  }
                  isProcessing = false;
@@ -849,11 +884,18 @@
             icon.classList.add('fas', sender === 'user' ? 'fa-user' : 'fa-robot');
             icon.classList.add(sender === 'user' ? 'text-blue-600' : 'text-gray-500');
 
-            const textP = document.createElement('p');
-            textP.textContent = text;
+            const contentDiv = document.createElement('div'); // New div for content
+            contentDiv.classList.add('message-content');
+            if (sender === 'user' || text === "..." || text.startsWith("(")) { // For user messages or placeholders, use textContent
+                contentDiv.textContent = text;
+            } else { // For Gemini responses, parse Markdown
+                const unsafeHtml = marked.parse(text);
+                contentDiv.innerHTML = DOMPurify.sanitize(unsafeHtml);
+            }
+
 
             messageDiv.appendChild(icon);
-            messageDiv.appendChild(textP);
+            messageDiv.appendChild(contentDiv); // Append contentDiv
             chatHistory.appendChild(messageDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
             return messageDiv;
@@ -868,7 +910,7 @@
              }
         }
 
-        function showError(message) { // Kept for internal logging, not UI display
+        function showError(message) {
             console.error("Error occurred:", message);
         }
 
@@ -890,7 +932,6 @@
              } else if (!isSessionActive) {
                  sessionButton.classList.remove('processing', 'speaking', 'active-session');
                  sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
-                 // sessionButton.classList.add('bg-green-500', 'hover:bg-green-600'); // Style handled by CSS
                  sessionButton.disabled = false;
              }
         }
@@ -911,7 +952,6 @@
                      sessionButton.disabled = false;
                  } else {
                     sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
-                    // sessionButton.classList.add('bg-green-500', 'hover:bg-green-600'); // Style handled by CSS
                     sessionButton.disabled = false;
                  }
              }
