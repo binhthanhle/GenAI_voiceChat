@@ -1,1008 +1,1841 @@
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Speech -> Gemini Chatbot (ElevenLabs TTS)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.10/purify.min.js" integrity="sha512-H+rglffZ6f5JvE1SdK3h3uQx2SoeZ4LPAESDDM0oZTxvsLd3B7Lw7FocKnuE0hK23jW/HMMh7hSdK8KjHH0r/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f3f4f6;
-            padding: 1rem;
-        }
-        .app-container {
-            background-color: white;
-            padding: 1.5rem;
-            border-radius: 1rem;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            width: 95%;
-            max-width: 800px;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            height: calc(100vh - 4rem);
-            max-height: 90vh;
-        }
-        .status-indicator {
-            min-height: 1.5rem;
-            margin-bottom: 0.75rem;
-            font-style: italic;
-            color: #6b7280;
-            font-weight: 500;
-        }
-        #chatHistory {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 1rem;
-            background-color: #f9fafb;
-            border: 1px solid #e5e7eb;
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-        .message-bubble {
-            padding: 0.75rem 1rem;
-            border-radius: 0.75rem;
-            max-width: 80%;
-            word-wrap: break-word;
-            display: flex;
-            align-items: flex-start;
-            gap: 0.5rem;
-            text-align: left;
-        }
-        .message-bubble.user {
-            background-color: #dbeafe;
-            color: #1e40af;
-            align-self: flex-end;
-            border-bottom-right-radius: 0.25rem;
-        }
-        .message-bubble.gemini {
-            background-color: #e5e7eb;
-            color: #374151;
-            align-self: flex-start;
-            border-bottom-left-radius: 0.25rem;
-        }
-         .message-bubble i {
-            margin-top: 0.125rem;
-            flex-shrink: 0;
-         }
-         .message-bubble .message-content {
-             margin: 0;
-             flex-grow: 1;
-         }
-        .message-bubble .message-content p { margin-bottom: 0.5em; }
-        .message-bubble .message-content p:last-child { margin-bottom: 0; }
-        .message-bubble .message-content strong, .message-bubble .message-content b { font-weight: 600; }
-        .message-bubble .message-content em, .message-bubble .message-content i { font-style: italic; }
-        .message-bubble .message-content ul, .message-bubble .message-content ol { margin-left: 1.5em; padding-left: 0.5em; }
-        .message-bubble .message-content li { margin-bottom: 0.25em; }
-        .message-bubble .message-content code {
-            background-color: #f0f0f0;
-            padding: 0.1em 0.3em;
-            border-radius: 0.25em;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 0.9em;
-        }
-        .message-bubble .message-content pre {
-            background-color: #f0f0f0;
-            padding: 0.5em;
-            border-radius: 0.25em;
-            overflow-x: auto;
-            font-size: 0.9em;
-        }
-        .message-bubble .message-content pre code {
-            background-color: transparent;
-            padding: 0;
-            border-radius: 0;
-        }
-        .message-bubble .message-content a {
-            color: #2563eb;
-            text-decoration: underline;
-        }
-        .message-bubble .message-content a:hover {
-            color: #1d4ed8;
-        }
-        .action-button {
-            transition: all 0.3s ease;
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
-            min-width: 150px;
-            border-radius: 9999px;
-            font-weight: bold;
-            color: white;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-        }
-        .action-button:hover:not(:disabled) {
-            transform: scale(1.05);
-        }
-        #sessionButton.active-session {
-            background-color: #ef4444;
-        }
-        #sessionButton.active-session:hover {
-            background-color: #dc2626;
-        }
-        #sessionButton:not(.active-session) {
-             background-color: #22c55e;
-        }
-        #sessionButton:not(.active-session):hover {
-             background-color: #16a34a;
-        }
-        #clearSessionButton {
-            background-color: #6b7280;
-        }
-        #clearSessionButton:hover {
-            background-color: #4b5563;
-        }
-        .session-button.processing {
-            background-color: #f59e0b;
-            color: white;
-            cursor: not-allowed;
-        }
-         .session-button.speaking {
-            background-color: #3b82f6;
-            color: white;
-            cursor: not-allowed;
-        }
-        label {
-            font-weight: 600;
-            color: #374151;
-            margin-right: 0.5rem;
-            white-space: nowrap;
-        }
-        input[type="password"], select {
-            border: 1px solid #d1d5db;
-            border-radius: 0.375rem;
-            padding: 0.5rem 0.75rem;
-            transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-            width: auto;
-            min-width: 100px;
-        }
-        input[type="password"] {
-             flex-grow: 1;
-             max-width: 300px;
-             margin-bottom: 0;
-        }
-        input[type="password"]:focus, select:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
-        }
-        .config-section {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-            padding: 0.75rem;
-            background-color: #f9fafb;
-            border-radius: 0.5rem;
-            border: 1px solid #e5e7eb;
-        }
-        .config-row {
-             display: flex;
-             align-items: center;
-             justify-content: center;
-             width: 100%;
-             flex-wrap: wrap;
-             gap: 0.5rem 1rem;
-        }
-        .config-row label:not(:first-child) {
-             margin-left: 1rem;
-        }
-        #audioPlayer {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border-width: 0;
-        }
-        .button-container {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
-            margin-top: auto;
-            padding-top: 1rem;
-        }
 
-    </style>
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Speech -> Gemini Chatbot (ElevenLabs TTS)</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+
+body {
+
+font-family: 'Inter', sans-serif;
+
+display: flex;
+
+justify-content: center;
+
+align-items: center;
+
+min-height: 100vh;
+
+background-color: #f3f4f6;
+
+padding: 1rem;
+
+}
+
+.app-container {
+
+background-color: white;
+
+padding: 1.5rem;
+
+border-radius: 1rem;
+
+box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+width: 95%;
+
+max-width: 800px;
+
+text-align: center;
+
+display: flex;
+
+flex-direction: column;
+
+height: calc(100vh - 4rem);
+
+max-height: 90vh;
+
+}
+
+.status-indicator {
+
+min-height: 1.5rem;
+
+margin-bottom: 0.75rem;
+
+font-style: italic;
+
+color: #6b7280;
+
+font-weight: 500;
+
+}
+
+#chatHistory {
+
+flex-grow: 1;
+
+overflow-y: auto;
+
+padding: 1rem;
+
+background-color: #f9fafb;
+
+border: 1px solid #e5e7eb;
+
+border-radius: 0.5rem;
+
+margin-bottom: 1rem;
+
+display: flex;
+
+flex-direction: column;
+
+gap: 0.75rem;
+
+}
+
+.message-bubble {
+
+padding: 0.75rem 1rem;
+
+border-radius: 0.75rem;
+
+max-width: 80%;
+
+word-wrap: break-word;
+
+display: flex;
+
+align-items: flex-start;
+
+gap: 0.5rem;
+
+}
+
+.message-bubble.user {
+
+background-color: #dbeafe;
+
+color: #1e40af;
+
+align-self: flex-end;
+
+border-bottom-right-radius: 0.25rem;
+
+}
+
+.message-bubble.gemini {
+
+background-color: #e5e7eb;
+
+color: #374151;
+
+align-self: flex-start;
+
+border-bottom-left-radius: 0.25rem;
+
+}
+
+.message-bubble i {
+
+margin-top: 0.125rem;
+
+}
+
+.message-bubble p {
+
+margin: 0;
+
+}
+
+.action-button { /* Generic class for session and clear buttons */
+
+transition: all 0.3s ease;
+
+padding: 0.75rem 1.5rem;
+
+font-size: 1rem;
+
+min-width: 150px;
+
+border-radius: 9999px; /* pill shape */
+
+font-weight: bold;
+
+color: white;
+
+box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+
+}
+
+.action-button:hover:not(:disabled) {
+
+transform: scale(1.05);
+
+}
+
+#sessionButton.active-session {
+
+background-color: #ef4444; /* Red for End Session */
+
+}
+
+#sessionButton.active-session:hover {
+
+background-color: #dc2626;
+
+}
+
+#sessionButton:not(.active-session) {
+
+background-color: #22c55e; /* Green for Start Session */
+
+}
+
+#sessionButton:not(.active-session):hover {
+
+background-color: #16a34a;
+
+}
+
+#clearSessionButton {
+
+background-color: #6b7280; /* Gray for Clear Session */
+
+}
+
+#clearSessionButton:hover {
+
+background-color: #4b5563;
+
+}
+
+.session-button.processing { /* Combined processing/speaking style */
+
+background-color: #f59e0b; /* Amber */
+
+color: white;
+
+cursor: not-allowed;
+
+}
+
+.session-button.speaking {
+
+background-color: #3b82f6; /* Blue for speaking phase */
+
+color: white;
+
+cursor: not-allowed;
+
+}
+
+
+
+label {
+
+font-weight: 600;
+
+color: #374151;
+
+margin-right: 0.5rem;
+
+white-space: nowrap;
+
+}
+
+input[type="password"], select {
+
+border: 1px solid #d1d5db;
+
+border-radius: 0.375rem;
+
+padding: 0.5rem 0.75rem;
+
+transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+
+width: auto;
+
+min-width: 100px;
+
+}
+
+input[type="password"] {
+
+flex-grow: 1;
+
+max-width: 300px;
+
+margin-bottom: 0;
+
+}
+
+input[type="password"]:focus, select:focus {
+
+outline: none;
+
+border-color: #3b82f6;
+
+box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+
+}
+
+.config-section {
+
+display: flex;
+
+flex-direction: column;
+
+align-items: center;
+
+gap: 0.75rem;
+
+margin-bottom: 1rem;
+
+padding: 0.75rem;
+
+background-color: #f9fafb;
+
+border-radius: 0.5rem;
+
+border: 1px solid #e5e7eb;
+
+}
+
+.config-row {
+
+display: flex;
+
+align-items: center;
+
+justify-content: center;
+
+width: 100%;
+
+flex-wrap: wrap;
+
+gap: 0.5rem 1rem;
+
+}
+
+.config-row label:not(:first-child) {
+
+margin-left: 1rem;
+
+}
+
+#audioPlayer {
+
+position: absolute;
+
+width: 1px;
+
+height: 1px;
+
+padding: 0;
+
+margin: -1px;
+
+overflow: hidden;
+
+clip: rect(0, 0, 0, 0);
+
+white-space: nowrap;
+
+border-width: 0;
+
+}
+
+.button-container {
+
+display: flex;
+
+justify-content: center;
+
+gap: 1rem; /* Space between buttons */
+
+margin-top: auto; /* Push buttons to bottom */
+
+padding-top: 1rem; /* Add some space above buttons */
+
+}
+
+
+
+</style>
+
 </head>
+
 <body>
-    <div class="app-container">
-        <h1 class="text-xl font-bold mb-3 text-gray-800">Speech -> Gemini Chatbot</h1>
-
-        <div class="config-section">
-             <div class="config-row">
-                <label for="apiKeyInput">Gemini API Key:</label>
-                <input type="password" id="apiKeyInput" placeholder="Enter your Gemini API key" class="flex-grow">
-             </div>
-             <div class="config-row">
-                 <label for="sttLanguage">Input Language:</label>
-                 <select id="sttLanguage">
-                     <option value="en-US" selected>English (US)</option>
-                     <option value="vi-VN">Vietnamese</option>
-                 </select>
-                 <label for="silenceTimeoutSelect">Response Time:</label> <select id="silenceTimeoutSelect">
-                     <option value="1000">1 Second</option>
-                     <option value="2000">2 Seconds</option>
-                     <option value="3000" selected>3 Seconds</option>
-                 </select>
-             </div>
-        </div>
-
-        <div id="status" class="status-indicator">Enter API Key and select language</div>
-
-        <div id="chatHistory">
-            <div class="message-bubble gemini">
-                 <i class="fas fa-robot text-gray-500"></i>
-                 <div class="message-content"><p>Hi there! Start a session and speak your query.</p></div>
-             </div>
-        </div>
-
-        <div class="button-container">
-            <button id="sessionButton" class="action-button">
-                <i class="fas fa-play mr-2"></i> Start Session
-            </button>
-            <button id="clearSessionButton" class="action-button"> <i class="fas fa-trash-alt mr-2"></i> Clear Session
-            </button>
-        </div>
-
-        <audio id="audioPlayer"></audio>
-    </div>
-
-    <script>
-        // --- DOM Elements ---
-        const sessionButton = document.getElementById('sessionButton');
-        const clearSessionButton = document.getElementById('clearSessionButton');
-        const statusDiv = document.getElementById('status');
-        const chatHistory = document.getElementById('chatHistory');
-        const apiKeyInput = document.getElementById('apiKeyInput');
-        const sttLanguageSelect = document.getElementById('sttLanguage');
-        const silenceTimeoutSelect = document.getElementById('silenceTimeoutSelect');
-        const audioPlayer = document.getElementById('audioPlayer');
-
-        // --- Configuration ---
-        const GEMINI_MODEL = "gemini-2.0-flash";
-        let SILENCE_TIMEOUT_MS = parseInt(silenceTimeoutSelect.value);
-
-        // --- ElevenLabs Configuration ---
-        const ELEVENLABS_API_KEY = "sk_c8ea1b9d4af1e1ca4418c9a714553a35fc684f2263ca8521";
-        const ELEVENLABS_VOICE_IDS = {
-            "en-US": "21m00Tcm4TlvDq8ikWAM",
-            "vi-VN": "3VnrjnYrskPMDsapTr8X"
-        };
-        const ELEVENLABS_API_BASE_URL = `https://api.elevenlabs.io/v1/text-to-speech/`;
-
-        // --- State ---
-        let isSessionActive = false;
-        let isListening = false;
-        let isProcessing = false;
-        let isSpeaking = false;
-        let recognition;
-        let currentUtteranceAggregatedFinalText = ''; // Accumulates final parts of the current user utterance
-        let currentGeminiMessageElement = null;
-        let currentUserQueryBubble = null;
-        let currentSttLang = sttLanguageSelect.value;
-        let abortController = null;
-        let restartTimer = null;
-        let silenceTimeout = null;
-        let currentAudioObjectURL = null;
-        let initialStartAttempt = false;
-
-        // --- Feature Detection ---
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-        // --- Initialization ---
-        if (!SpeechRecognition) {
-            console.error("Your browser doesn't support the Web Speech Recognition API. Try Chrome or Edge.");
-            updateStatus("Speech Recognition not supported by browser.");
-            sessionButton.disabled = true;
-            sessionButton.classList.add('opacity-50', 'cursor-not-allowed');
-            clearSessionButton.disabled = true;
-            clearSessionButton.classList.add('opacity-50', 'cursor-not-allowed');
-        } else {
-            setupSpeechRecognition();
-        }
-
-        // --- Event Listeners ---
-        sessionButton.addEventListener('click', toggleSession);
-        clearSessionButton.addEventListener('click', clearSession);
-
-        sttLanguageSelect.addEventListener('change', (event) => {
-            currentSttLang = event.target.value;
-            console.log("STT Language changed to:", currentSttLang);
-            if (isSessionActive) {
-                stopRecognition(true);
-            }
-        });
-
-        silenceTimeoutSelect.addEventListener('change', (event) => {
-            SILENCE_TIMEOUT_MS = parseInt(event.target.value);
-            console.log("Silence Timeout changed to:", SILENCE_TIMEOUT_MS);
-            if (silenceTimeout) {
-                clearTimeout(silenceTimeout);
-                if (isListening && currentUserQueryBubble && currentUserQueryBubble.querySelector('.message-content').textContent.trim()) {
-                    silenceTimeout = setTimeout(handleSilenceTimeout, SILENCE_TIMEOUT_MS);
-                }
-            }
-        });
-
-        apiKeyInput.addEventListener('input', () => {
-            if (!isSessionActive) updateStatus('Ready to start session');
-         });
-
-        audioPlayer.onended = () => {
-            console.log('Audio finished playing.');
-            isSpeaking = false;
-            isProcessing = false;
-            setButtonSpeaking(false);
-
-            if (currentAudioObjectURL) {
-                URL.revokeObjectURL(currentAudioObjectURL);
-                currentAudioObjectURL = null;
-            }
-
-            if (isSessionActive) {
-                updateStatus("Listening...");
-                startRecognition();
-            }
-        };
-
-        audioPlayer.onerror = (e) => {
-            console.error('Audio player error:', e);
-            isSpeaking = false;
-            isProcessing = false;
-            setButtonSpeaking(false);
-
-            if (currentAudioObjectURL) {
-                URL.revokeObjectURL(currentAudioObjectURL);
-                currentAudioObjectURL = null;
-            }
-
-            if (isSessionActive) {
-                updateStatus("Audio playback error. Listening...");
-                startRecognition();
-            }
-        };
-
-
-        // --- Session Management ---
-        function toggleSession() {
-            if (isSessionActive) {
-                endSession();
-            } else {
-                startSession();
-            }
-        }
-
-        function startSession() {
-            const apiKey = apiKeyInput.value.trim();
-            if (!apiKey) {
-                console.error("Gemini API Key missing.");
-                updateStatus("Please enter Gemini API Key.");
-                apiKeyInput.focus();
-                return;
-            }
-             if (!ELEVENLABS_API_KEY) {
-                console.error("ElevenLabs API Key is missing in the code.");
-                updateStatus("Configuration error (ElevenLabs).");
-                return;
-            }
-            if (!recognition) {
-                 console.error("Speech recognition not available.");
-                 updateStatus("Speech recognition not available.");
-                 return;
-            }
-
-            console.log("Attempting to start session...");
-            currentUtteranceAggregatedFinalText = '';
-            currentUserQueryBubble = null;
-            updateStatus("Requesting microphone access...");
-            initialStartAttempt = true;
-            startRecognition();
-        }
-
-        function endSession(isClearing = false) {
-            console.log("Ending session...");
-            isSessionActive = false;
-
-            stopRecognition(false);
-            clearTimeout(silenceTimeout);
-            cancelGeminiCall();
-            if (isSpeaking) {
-                audioPlayer.pause();
-                audioPlayer.src = '';
-                 if (currentAudioObjectURL) {
-                    URL.revokeObjectURL(currentAudioObjectURL);
-                    currentAudioObjectURL = null;
-                 }
-            }
-
-            sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
-            sessionButton.classList.remove('active-session', 'processing', 'speaking');
-            sessionButton.disabled = false;
-            apiKeyInput.disabled = false;
-            sttLanguageSelect.disabled = false;
-            silenceTimeoutSelect.disabled = false;
-
-            if (!isClearing) {
-                updateStatus('Session Ended. Ready to start.');
-            }
-
-            isProcessing = false;
-            isSpeaking = false;
-            currentUtteranceAggregatedFinalText = '';
-            currentGeminiMessageElement = null;
-            currentUserQueryBubble = null;
-        }
-
-        function clearSession() {
-            console.log("Clearing session...");
-            if (isSessionActive) {
-                endSession(true);
-            }
-            chatHistory.innerHTML = '';
-            addMessageToChat("Session cleared. Ready to start a new conversation.", "gemini");
-            currentUtteranceAggregatedFinalText = '';
-            currentGeminiMessageElement = null;
-            currentUserQueryBubble = null;
-            updateStatus('Session Cleared. Ready to start.');
-        }
-
-
-        // --- Speech Recognition Control ---
-        function setupSpeechRecognition() {
-            recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-
-            recognition.onstart = () => {
-                isListening = true;
-                console.log('Recognition started with lang:', recognition.lang);
-
-                if (initialStartAttempt) {
-                    console.log("Microphone access granted, session active.");
-                    isSessionActive = true;
-                    initialStartAttempt = false;
-                    sessionButton.innerHTML = '<i class="fas fa-stop mr-2"></i> End Session';
-                    sessionButton.classList.add('active-session');
-                    apiKeyInput.disabled = true;
-                    sttLanguageSelect.disabled = true;
-                    silenceTimeoutSelect.disabled = true;
-                }
-
-                 if (!isProcessing && !isSpeaking) {
-                    updateStatus("Listening...");
-                 }
-            };
-
-            recognition.onresult = handleRecognitionResult;
-            recognition.onerror = handleRecognitionError;
-            recognition.onend = handleRecognitionEnd;
-
-             recognition.onspeechend = () => {
-                console.log("User stopped speaking (onspeechend).");
-                clearTimeout(silenceTimeout);
-                if (isSessionActive && !isProcessing && !isSpeaking && currentUtteranceAggregatedFinalText.trim()) {
-                    console.log("Sending query after onspeechend.");
-                    const queryToSend = currentUtteranceAggregatedFinalText.trim();
-                    if (currentUserQueryBubble) {
-                        currentUserQueryBubble.querySelector('.message-content').textContent = queryToSend;
-                    } else {
-                        addMessageToChat(queryToSend, 'user');
-                    }
-                    sendToGemini(queryToSend);
-                    currentUtteranceAggregatedFinalText = '';
-                    currentUserQueryBubble = null;
-                }
-             };
-        }
-
-        function startRecognition() {
-            if (isListening || (!isSessionActive && !initialStartAttempt)) return;
-
-            clearTimeout(restartTimer);
-            clearTimeout(silenceTimeout);
-            // currentUtteranceAggregatedFinalText and currentUserQueryBubble are reset when a query is sent or session starts/clears
-
-            restartTimer = setTimeout(() => {
-                try {
-                    console.log("Calling recognition.start()");
-                    recognition.lang = currentSttLang;
-                    recognition.start();
-                } catch (e) {
-                    console.error("Error in recognition.start():", e);
-                    if (e.name === 'InvalidStateError') {
-                        console.warn("Attempted to start recognition in invalid state.");
-                        if (initialStartAttempt) {
-                            initialStartAttempt = false;
-                            updateStatus("Failed to start. Try again.");
-                            sessionButton.disabled = false;
-                        } else if (isSessionActive) {
-                            endSession();
-                            updateStatus("Mic error. Session ended.");
-                        }
-                    } else {
-                         updateStatus("Could not start listening. Microphone issue?");
-                         if (initialStartAttempt) {
-                             initialStartAttempt = false;
-                             updateStatus("Failed to start. Try again.");
-                             sessionButton.disabled = false;
-                         } else {
-                             endSession();
-                         }
-                    }
-                }
-            }, 250);
-        }
-
-        function stopRecognition(expectRestart = false) {
-            clearTimeout(restartTimer);
-            clearTimeout(silenceTimeout);
-            if (isListening && recognition) {
-                console.log("Stopping recognition. Expect restart:", expectRestart);
-                try {
-                    recognition.stop();
-                } catch (e) {
-                    console.error("Error stopping recognition:", e);
-                }
-                isListening = false;
-            }
-             if (!expectRestart && !isProcessing && !isSpeaking && !isSessionActive) {
-                 updateStatus("Stopped.");
-             }
-        }
-
-         function handleRecognitionResult(event) {
-            if (!isSessionActive || isProcessing || isSpeaking) return;
-
-            clearTimeout(silenceTimeout);
-
-            let interimTranscriptThisEvent = '';
-            let newlyFinalizedTextThisEvent = ''; // Store only newly finalized text from *this* event
-
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                const transcriptPart = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    newlyFinalizedTextThisEvent += transcriptPart.trim() + ' ';
-                } else {
-                    interimTranscriptThisEvent += transcriptPart;
-                }
-            }
-
-            // Append newly finalized text to the ongoing utterance's final transcript
-            if (newlyFinalizedTextThisEvent) {
-                currentUtteranceAggregatedFinalText += newlyFinalizedTextThisEvent;
-            }
-
-            // Display combines the aggregated final parts of the current utterance with the current interim part
-            const liveDisplayQuery = (currentUtteranceAggregatedFinalText + interimTranscriptThisEvent).trim();
-
-            if (liveDisplayQuery) {
-                if (!currentUserQueryBubble) {
-                    // Create a new bubble for the start of a new user utterance
-                    currentUserQueryBubble = addMessageToChat(liveDisplayQuery, 'user');
-                } else {
-                    // Update the existing bubble for the current utterance
-                    currentUserQueryBubble.querySelector('.message-content').textContent = liveDisplayQuery;
-                }
-                chatHistory.scrollTop = chatHistory.scrollHeight;
-                // Set a new silence timeout
-                silenceTimeout = setTimeout(handleSilenceTimeout, SILENCE_TIMEOUT_MS);
-            }
-        }
-
-        function handleSilenceTimeout() {
-             if (!isSessionActive || isProcessing || isSpeaking) return;
-
-             const queryToSend = currentUtteranceAggregatedFinalText.trim();
-             if (queryToSend) {
-                 console.log(`Silence timeout (${SILENCE_TIMEOUT_MS}ms) detected. Sending: "${queryToSend}"`);
-                 if (currentUserQueryBubble) {
-                     currentUserQueryBubble.querySelector('.message-content').textContent = queryToSend;
-                 } else {
-                     addMessageToChat(queryToSend, 'user'); // Fallback, should have bubble
-                 }
-                 sendToGemini(queryToSend);
-                 currentUtteranceAggregatedFinalText = '';
-                 currentUserQueryBubble = null;
-             } else {
-                 console.log("Silence timeout detected, but no final transcript to send.");
-                 currentUtteranceAggregatedFinalText = '';
-                 currentUserQueryBubble = null;
-                 if(isSessionActive && !isListening && !isProcessing && !isSpeaking) {
-                    startRecognition();
-                 }
-             }
-        }
-
-
-        function handleRecognitionError(event) {
-            isListening = false;
-            clearTimeout(silenceTimeout);
-            console.error('Speech recognition error:', event.error, 'Message:', event.message);
-            let statusMessage = `Recognition Error: ${event.error}`;
-
-            const wasInitialAttempt = initialStartAttempt;
-            initialStartAttempt = false;
-
-            if (event.error === 'not-allowed') {
-                statusMessage = "Microphone access denied. Please allow access in browser settings.";
-                if (wasInitialAttempt) {
-                    updateStatus("Permission denied. Session not started.");
-                    sessionButton.disabled = false;
-                } else {
-                    endSession();
-                }
-            } else if (event.error === 'no-speech') {
-                 console.log("No speech detected, will restart if session active.");
-                 if(isSessionActive && !isProcessing && !isSpeaking) startRecognition();
-                 return;
-            } else if (event.error === 'audio-capture') {
-                statusMessage = "Microphone Error. Check connection/permissions.";
-                endSession();
-            } else if (event.error === 'network') {
-                 statusMessage = "Network error during speech recognition. Check connection.";
-            } else if (event.error === 'service-not-allowed') {
-                 statusMessage = "Speech recognition service denied. Check browser/OS settings.";
-                 endSession();
-            } else {
-                 statusMessage = `Recognition Error: ${event.error}. Please try restarting the session.`;
-            }
-
-            updateStatus(statusMessage);
-            if (wasInitialAttempt && event.error !== 'not-allowed') {
-                 updateStatus("Failed to start microphone.");
-                 sessionButton.disabled = false;
-            }
-        }
-
-        function handleRecognitionEnd() {
-            isListening = false;
-            clearTimeout(silenceTimeout);
-            console.log('Recognition ended.');
-            if (isSessionActive && !isProcessing && !isSpeaking && !currentUtteranceAggregatedFinalText.trim()) {
-                console.log("Session active & idle, attempting to restart recognition...");
-                startRecognition();
-            } else if (isSessionActive && (isProcessing || isSpeaking || currentUtteranceAggregatedFinalText.trim())) {
-                 console.log("Recognition ended, but session is busy or has pending transcript. Will restart/process after idle.");
-            } else if (!isSessionActive) {
-                 console.log("Recognition ended, session inactive.");
-                 if (sessionButton.classList.contains('active-session')) {
-                     endSession();
-                 }
-            }
-        }
-
-
-        // --- Gemini API Call ---
-        async function sendToGemini(text) {
-            clearTimeout(silenceTimeout);
-
-            const queryText = text.trim();
-            if (!queryText || isProcessing || isSpeaking) {
-                console.log("Send request ignored (empty query or already busy).");
-                if (!queryText && currentUserQueryBubble) {
-                    currentUserQueryBubble = null;
-                }
-                currentUtteranceAggregatedFinalText = ''; // Ensure this is cleared if query is empty
-                return;
-            }
-
-            const apiKey = apiKeyInput.value.trim();
-            if (!apiKey) {
-                updateStatus("Error: Gemini API Key missing.");
-                endSession();
-                return;
-            }
-
-            cancelGeminiCall();
-            abortController = new AbortController();
-
-            const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`;
-
-            console.log('Sending to Gemini:', queryText);
-            isProcessing = true;
-            setButtonProcessing(true, 'Gemini...');
-            updateStatus('Asking Gemini...');
-            let accumulatedGeminiResponse = '';
-            // currentUtteranceAggregatedFinalText and currentUserQueryBubble are reset by the calling function (handleSilenceTimeout or onspeechend)
-
-            currentGeminiMessageElement = addMessageToChat("...", 'gemini');
-
-            const payload = {
-                contents: [{ role: "user", parts: [{ text: queryText }] }],
-            };
-
-            if (isListening) {
-                stopRecognition(false);
-                console.log("Recognition paused for Gemini call.");
-            }
-
-            try {
-                const response = await fetch(geminiApiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                    signal: abortController.signal
-                });
-
-                if (!response.ok) {
-                    let errorBody = 'Could not read error details.';
-                     let specificError = `API Error: ${response.status} ${response.statusText}.`;
-                    try {
-                        errorBody = await response.text();
-                        if (errorBody.trim().startsWith('{')) {
-                           const errorJson = JSON.parse(errorBody);
-                           errorBody = errorJson.error?.message || JSON.stringify(errorJson);
-                           if (response.status === 400 && errorBody.includes("API key not valid")) {
-                                specificError = "Invalid Gemini API Key.";
-                           } else if (response.status === 429) {
-                                specificError = "API Quota Exceeded/Rate Limited.";
-                           } else { specificError += ` Details: ${errorBody}`; }
-                        } else { specificError += ` Details: ${errorBody}`; }
-                    } catch (parseError) { specificError += ` Details: ${errorBody}`; }
-                    throw new Error(specificError);
-                }
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop();
-                    for (const line of lines) {
-                         if (line.startsWith('data: ')) {
-                            try {
-                                const jsonData = JSON.parse(line.substring(6));
-                                const textPart = jsonData?.candidates?.[0]?.content?.parts?.[0]?.text;
-                                if (textPart) {
-                                    accumulatedGeminiResponse += textPart;
-                                    if (currentGeminiMessageElement) {
-                                        const unsafeHtml = marked.parse(accumulatedGeminiResponse);
-                                        currentGeminiMessageElement.querySelector('.message-content').innerHTML = DOMPurify.sanitize(unsafeHtml);
-                                    }
-                                    chatHistory.scrollTop = chatHistory.scrollHeight;
-                                }
-                            } catch (e) { console.warn('Error parsing SSE chunk:', e); }
-                        }
-                    }
-                }
-                 if (buffer.startsWith('data: ')) {
-                     try {
-                         const jsonData = JSON.parse(buffer.substring(6));
-                         const textPart = jsonData?.candidates?.[0]?.content?.parts?.[0]?.text;
-                         if (textPart && currentGeminiMessageElement) {
-                             accumulatedGeminiResponse += textPart;
-                             const unsafeHtml = marked.parse(accumulatedGeminiResponse);
-                             currentGeminiMessageElement.querySelector('.message-content').innerHTML = DOMPurify.sanitize(unsafeHtml);
-                             chatHistory.scrollTop = chatHistory.scrollHeight;
-                         }
-                     } catch (e) { console.warn('Error parsing final SSE buffer:', e); }
-                 }
-
-                 if (currentGeminiMessageElement && currentGeminiMessageElement.querySelector('.message-content').innerHTML === "..." && !accumulatedGeminiResponse.trim()) {
-                     currentGeminiMessageElement.querySelector('.message-content').textContent = "(No text response)";
-                 }
-
-
-                console.log('Gemini Response Complete:', accumulatedGeminiResponse.substring(0,100)+"...");
-                currentGeminiMessageElement = null;
-                speakText(accumulatedGeminiResponse || "Gemini did not reply.");
-
-            } catch (error) {
-                 if (error.name === 'AbortError') {
-                    console.log('Gemini fetch aborted.');
-                    updateStatus('Call cancelled.');
-                    if (currentGeminiMessageElement) {
-                        currentGeminiMessageElement.querySelector('.message-content').textContent = "(Cancelled)";
-                    }
-                 } else {
-                    console.error('Error calling Gemini API:', error);
-                    updateStatus(`Gemini API Error. Check console.`);
-                    if (currentGeminiMessageElement) {
-                        currentGeminiMessageElement.querySelector('.message-content').textContent = "(Error fetching response)";
-                    }
-                 }
-                 isProcessing = false;
-                 setButtonProcessing(false);
-                 currentGeminiMessageElement = null;
-                 if (isSessionActive && !isListening) {
-                     startRecognition();
-                 }
-            } finally {
-                abortController = null;
-            }
-        }
-
-        function cancelGeminiCall() {
-            if (abortController) {
-                console.log("Aborting Gemini API call...");
-                abortController.abort();
-                abortController = null;
-            }
-        }
-
-        // --- Text-to-Speech (Using ElevenLabs with Fallback) ---
-        async function speakText(text) {
-            const handleTTSFallback = (logMessage) => {
-                console.warn(logMessage);
-                isSpeaking = false;
-                isProcessing = false;
-                setButtonSpeaking(false);
-                if (isSessionActive && !isListening) {
-                    updateStatus("Listening...");
-                    startRecognition();
-                }
-            };
-
-            if (!ELEVENLABS_API_KEY) {
-                handleTTSFallback("ElevenLabs API Key missing. Skipping TTS.");
-                return;
-            }
-            if (!text.trim() || !isSessionActive) {
-                handleTTSFallback("ElevenLabs TTS skipped (no text or session ended).");
-                return;
-            }
-
-            const voiceId = ELEVENLABS_VOICE_IDS[currentSttLang] || ELEVENLABS_VOICE_IDS["en-US"];
-            const elevenLabsApiUrl = ELEVENLABS_API_BASE_URL + voiceId;
-
-            console.log(`Requesting speech from ElevenLabs (Voice ID: ${voiceId})...`);
-            isSpeaking = true;
-            setButtonSpeaking(true);
-            updateStatus('Generating audio...');
-
-            const payload = {
-                text: text,
-                model_id: "eleven_multilingual_v2",
-                voice_settings: { stability: 0.5, similarity_boost: 0.75 }
-            };
-
-            try {
-                const response = await fetch(elevenLabsApiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'xi-api-key': ELEVENLABS_API_KEY,
-                        'Accept': 'audio/mpeg'
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    let errorDetail = `ElevenLabs API Error: ${response.status} ${response.statusText}`;
-                    try { const errorJson = await response.json(); errorDetail += ` - ${errorJson.detail?.message || JSON.stringify(errorJson.detail)}`; }
-                    catch (e) { try { const textError = await response.text(); errorDetail += ` - ${textError}`; } catch (textE) { /* ignore */ } }
-                    handleTTSFallback(`ElevenLabs API request failed: ${errorDetail}`);
-                    return;
-                }
-
-                const audioBlob = await response.blob();
-                if (!audioBlob || audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) {
-                     handleTTSFallback(`Received invalid audio data from ElevenLabs (Type: ${audioBlob?.type}, Size: ${audioBlob?.size}). Skipping TTS.`);
-                     return;
-                }
-
-                if (currentAudioObjectURL) { URL.revokeObjectURL(currentAudioObjectURL); }
-                currentAudioObjectURL = URL.createObjectURL(audioBlob);
-                audioPlayer.src = currentAudioObjectURL;
-                updateStatus('Speaking...');
-                audioPlayer.play().catch(playError => {
-                    handleTTSFallback(`Error initiating audio playback: ${playError}. Skipping TTS.`);
-                });
-
-            } catch (error) {
-                handleTTSFallback(`Error fetching or processing ElevenLabs audio: ${error}. Skipping TTS.`);
-            }
-        }
-
-
-        // --- UI Updates ---
-        function addMessageToChat(text, sender) {
-            const messageDiv = document.createElement('div');
-            messageDiv.classList.add('message-bubble', sender);
-
-            const icon = document.createElement('i');
-            icon.classList.add('fas', sender === 'user' ? 'fa-user' : 'fa-robot');
-            icon.classList.add(sender === 'user' ? 'text-blue-600' : 'text-gray-500');
-
-            const contentDiv = document.createElement('div');
-            contentDiv.classList.add('message-content');
-
-            if (sender === 'user' || text === "..." || text.startsWith("(") ) {
-                contentDiv.textContent = text;
-            } else {
-                if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
-                    const unsafeHtml = marked.parse(text);
-                    contentDiv.innerHTML = DOMPurify.sanitize(unsafeHtml);
-                } else {
-                    console.error("Marked.js or DOMPurify not loaded. Displaying raw text.");
-                    contentDiv.textContent = text;
-                }
-            }
-
-
-            messageDiv.appendChild(icon);
-            messageDiv.appendChild(contentDiv);
-            chatHistory.appendChild(messageDiv);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-            return messageDiv;
-        }
-
-        function updateStatus(message) {
-            statusDiv.textContent = message;
-             if (isProcessing && !isSpeaking) {
-                 statusDiv.textContent = "Asking Gemini...";
-             } else if (isSpeaking) {
-                 statusDiv.textContent = "Speaking...";
-             }
-        }
-
-        function showError(message) {
-            console.error("Error occurred:", message);
-        }
-
-        function hideError() {
-            // No visual error element
-        }
-
-        function setButtonProcessing(processing, text = 'Processing...') {
-             sessionButton.disabled = processing || isSpeaking;
-             if (processing && !isSpeaking) {
-                 sessionButton.classList.remove('speaking');
-                 sessionButton.classList.add('processing');
-                 sessionButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> ${text}`;
-             } else if (!processing && !isSpeaking && isSessionActive) {
-                 sessionButton.classList.remove('processing', 'speaking');
-                 sessionButton.innerHTML = '<i class="fas fa-stop mr-2"></i> End Session';
-                 sessionButton.classList.add('active-session');
-                 sessionButton.disabled = false;
-             } else if (!isSessionActive) {
-                 sessionButton.classList.remove('processing', 'speaking', 'active-session');
-                 sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
-                 sessionButton.disabled = false;
-             }
-        }
-
-         function setButtonSpeaking(speaking) {
-             sessionButton.disabled = speaking || isProcessing;
-             if (speaking) {
-                 sessionButton.classList.remove('processing');
-                 sessionButton.classList.add('speaking');
-                 sessionButton.innerHTML = `<i class="fas fa-volume-up mr-2"></i> Speaking...`;
-             } else {
-                 sessionButton.classList.remove('speaking');
-                 if (isProcessing) {
-                     setButtonProcessing(true);
-                 } else if (isSessionActive) {
-                     sessionButton.innerHTML = '<i class="fas fa-stop mr-2"></i> End Session';
-                     sessionButton.classList.add('active-session');
-                     sessionButton.disabled = false;
-                 } else {
-                    sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
-                    sessionButton.disabled = false;
-                 }
-             }
-        }
-    </script>
+
+<div class="app-container">
+
+<h1 class="text-xl font-bold mb-3 text-gray-800">Speech -> Gemini Chatbot</h1>
+
+
+
+<div class="config-section">
+
+<div class="config-row">
+
+<label for="apiKeyInput">Gemini API Key:</label>
+
+<input type="password" id="apiKeyInput" placeholder="Enter your Gemini API key" class="flex-grow">
+
+</div>
+
+<div class="config-row">
+
+<label for="sttLanguage">Input Language:</label>
+
+<select id="sttLanguage">
+
+<option value="en-US" selected>English (US)</option>
+
+<option value="vi-VN">Vietnamese</option>
+
+</select>
+
+<label for="silenceTimeoutSelect">Response Time:</label> <select id="silenceTimeoutSelect">
+
+<option value="1000">1 Second</option>
+
+<option value="2000">2 Seconds</option>
+
+<option value="3000" selected>3 Seconds</option>
+
+</select>
+
+</div>
+
+</div>
+
+
+
+<div id="status" class="status-indicator">Enter API Key and select language</div>
+
+
+
+<div id="chatHistory">
+
+<div class="message-bubble gemini">
+
+<i class="fas fa-robot text-gray-500"></i>
+
+<p>Hi there! Start a session and speak your query.</p>
+
+</div>
+
+</div>
+
+
+
+<div class="button-container">
+
+<button id="sessionButton" class="action-button">
+
+<i class="fas fa-play mr-2"></i> Start Session
+
+</button>
+
+<button id="clearSessionButton" class="action-button"> <i class="fas fa-trash-alt mr-2"></i> Clear Session
+
+</button>
+
+</div>
+
+
+
+<audio id="audioPlayer"></audio>
+
+</div>
+
+
+
+<script>
+
+// --- DOM Elements ---
+
+const sessionButton = document.getElementById('sessionButton');
+
+const clearSessionButton = document.getElementById('clearSessionButton'); // New
+
+const statusDiv = document.getElementById('status');
+
+const chatHistory = document.getElementById('chatHistory');
+
+const apiKeyInput = document.getElementById('apiKeyInput');
+
+const sttLanguageSelect = document.getElementById('sttLanguage');
+
+const silenceTimeoutSelect = document.getElementById('silenceTimeoutSelect'); // New
+
+const audioPlayer = document.getElementById('audioPlayer');
+
+
+
+// --- Configuration ---
+
+const GEMINI_MODEL = "gemini-2.0-flash";
+
+let SILENCE_TIMEOUT_MS = parseInt(silenceTimeoutSelect.value); // Initialize from select
+
+
+
+// --- ElevenLabs Configuration ---
+
+const ELEVENLABS_API_KEY = "sk_c8ea1b9d4af1e1ca4418c9a714553a35fc684f2263ca8521";
+
+const ELEVENLABS_VOICE_IDS = {
+
+"en-US": "21m00Tcm4TlvDq8ikWAM",
+
+"vi-VN": "3VnrjnYrskPMDsapTr8X"
+
+};
+
+const ELEVENLABS_API_BASE_URL = `https://api.elevenlabs.io/v1/text-to-speech/`;
+
+
+
+// --- State ---
+
+let isSessionActive = false;
+
+let isListening = false;
+
+let isProcessing = false;
+
+let isSpeaking = false;
+
+let recognition;
+
+let finalTranscript = '';
+
+let currentGeminiMessageElement = null;
+
+let currentSttLang = sttLanguageSelect.value;
+
+let abortController = null;
+
+let restartTimer = null;
+
+let silenceTimeout = null;
+
+let currentAudioObjectURL = null;
+
+let initialStartAttempt = false;
+
+
+
+// --- Feature Detection ---
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+
+
+// --- Initialization ---
+
+if (!SpeechRecognition) {
+
+console.error("Your browser doesn't support the Web Speech Recognition API. Try Chrome or Edge.");
+
+updateStatus("Speech Recognition not supported by browser.");
+
+sessionButton.disabled = true;
+
+sessionButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+clearSessionButton.disabled = true; // Disable clear button too
+
+clearSessionButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+} else {
+
+setupSpeechRecognition();
+
+}
+
+
+
+// --- Event Listeners ---
+
+sessionButton.addEventListener('click', toggleSession);
+
+clearSessionButton.addEventListener('click', clearSession); // New listener
+
+
+
+sttLanguageSelect.addEventListener('change', (event) => {
+
+currentSttLang = event.target.value;
+
+console.log("STT Language changed to:", currentSttLang);
+
+if (isSessionActive) {
+
+stopRecognition(true);
+
+}
+
+});
+
+
+
+silenceTimeoutSelect.addEventListener('change', (event) => { // New listener
+
+SILENCE_TIMEOUT_MS = parseInt(event.target.value);
+
+console.log("Silence Timeout changed to:", SILENCE_TIMEOUT_MS);
+
+// If a silence timeout is currently active, clear it and potentially start a new one
+
+if (silenceTimeout) {
+
+clearTimeout(silenceTimeout);
+
+if (isListening && (finalTranscript.trim() || document.querySelector('.message-bubble.user:last-child p')?.textContent?.trim())) { // Check if there's pending text
+
+silenceTimeout = setTimeout(handleSilenceTimeout, SILENCE_TIMEOUT_MS);
+
+}
+
+}
+
+});
+
+
+
+apiKeyInput.addEventListener('input', () => {
+
+if (!isSessionActive) updateStatus('Ready to start session');
+
+});
+
+
+
+// Audio Player Listeners
+
+audioPlayer.onended = () => {
+
+console.log('Audio finished playing.');
+
+isSpeaking = false;
+
+isProcessing = false;
+
+setButtonSpeaking(false);
+
+
+
+if (currentAudioObjectURL) {
+
+URL.revokeObjectURL(currentAudioObjectURL);
+
+currentAudioObjectURL = null;
+
+}
+
+
+
+if (isSessionActive) {
+
+updateStatus("Listening...");
+
+startRecognition();
+
+}
+
+};
+
+
+
+audioPlayer.onerror = (e) => {
+
+console.error('Audio player error:', e);
+
+isSpeaking = false;
+
+isProcessing = false;
+
+setButtonSpeaking(false);
+
+
+
+if (currentAudioObjectURL) {
+
+URL.revokeObjectURL(currentAudioObjectURL);
+
+currentAudioObjectURL = null;
+
+}
+
+
+
+if (isSessionActive) {
+
+updateStatus("Audio playback error. Listening...");
+
+startRecognition();
+
+}
+
+};
+
+
+
+
+
+// --- Session Management ---
+
+function toggleSession() {
+
+if (isSessionActive) {
+
+endSession();
+
+} else {
+
+startSession();
+
+}
+
+}
+
+
+
+function startSession() {
+
+const apiKey = apiKeyInput.value.trim();
+
+if (!apiKey) {
+
+console.error("Gemini API Key missing.");
+
+updateStatus("Please enter Gemini API Key.");
+
+apiKeyInput.focus();
+
+return;
+
+}
+
+if (!ELEVENLABS_API_KEY) {
+
+console.error("ElevenLabs API Key is missing in the code.");
+
+updateStatus("Configuration error (ElevenLabs).");
+
+return;
+
+}
+
+if (!recognition) {
+
+console.error("Speech recognition not available.");
+
+updateStatus("Speech recognition not available.");
+
+return;
+
+}
+
+
+
+console.log("Attempting to start session...");
+
+finalTranscript = '';
+
+updateStatus("Requesting microphone access...");
+
+initialStartAttempt = true;
+
+startRecognition();
+
+}
+
+
+
+function endSession(isClearing = false) { // Added isClearing parameter
+
+console.log("Ending session...");
+
+isSessionActive = false;
+
+
+
+stopRecognition(false);
+
+clearTimeout(silenceTimeout);
+
+cancelGeminiCall();
+
+if (isSpeaking) {
+
+audioPlayer.pause();
+
+audioPlayer.src = '';
+
+if (currentAudioObjectURL) {
+
+URL.revokeObjectURL(currentAudioObjectURL);
+
+currentAudioObjectURL = null;
+
+}
+
+}
+
+
+
+sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
+
+sessionButton.classList.remove('active-session', 'processing', 'speaking');
+
+// sessionButton.classList.add('bg-green-500', 'hover:bg-green-600'); // Style handled by CSS :not(.active-session)
+
+sessionButton.disabled = false;
+
+apiKeyInput.disabled = false;
+
+sttLanguageSelect.disabled = false;
+
+silenceTimeoutSelect.disabled = false; // Re-enable silence timeout select
+
+
+
+if (!isClearing) { // Only update status if not part of a clear operation
+
+updateStatus('Session Ended. Ready to start.');
+
+}
+
+
+
+isProcessing = false;
+
+isSpeaking = false;
+
+finalTranscript = '';
+
+currentGeminiMessageElement = null;
+
+}
+
+
+
+// New function to clear session
+
+function clearSession() {
+
+console.log("Clearing session...");
+
+if (isSessionActive) {
+
+endSession(true); // End the active session, indicating it's part of a clear
+
+}
+
+chatHistory.innerHTML = ''; // Clear chat display
+
+addMessageToChat("Session cleared. Ready to start a new conversation.", "gemini"); // Add initial message
+
+finalTranscript = '';
+
+currentGeminiMessageElement = null;
+
+updateStatus('Session Cleared. Ready to start.');
+
+}
+
+
+
+
+
+// --- Speech Recognition Control ---
+
+function setupSpeechRecognition() {
+
+recognition = new SpeechRecognition();
+
+recognition.continuous = true;
+
+recognition.interimResults = true;
+
+
+
+recognition.onstart = () => {
+
+isListening = true;
+
+console.log('Recognition started with lang:', recognition.lang);
+
+
+
+if (initialStartAttempt) {
+
+console.log("Microphone access granted, session active.");
+
+isSessionActive = true;
+
+initialStartAttempt = false;
+
+sessionButton.innerHTML = '<i class="fas fa-stop mr-2"></i> End Session';
+
+sessionButton.classList.add('active-session');
+
+apiKeyInput.disabled = true;
+
+sttLanguageSelect.disabled = true;
+
+silenceTimeoutSelect.disabled = true; // Disable silence timeout select
+
+}
+
+
+
+if (!isProcessing && !isSpeaking) {
+
+updateStatus("Listening...");
+
+}
+
+};
+
+
+
+recognition.onresult = handleRecognitionResult;
+
+recognition.onerror = handleRecognitionError;
+
+recognition.onend = handleRecognitionEnd;
+
+
+
+recognition.onspeechend = () => {
+
+console.log("User stopped speaking (onspeechend).");
+
+clearTimeout(silenceTimeout);
+
+};
+
+}
+
+
+
+function startRecognition() {
+
+if (isListening || (!isSessionActive && !initialStartAttempt)) return;
+
+
+
+clearTimeout(restartTimer);
+
+clearTimeout(silenceTimeout);
+
+finalTranscript = '';
+
+
+
+restartTimer = setTimeout(() => {
+
+try {
+
+console.log("Calling recognition.start()");
+
+recognition.lang = currentSttLang;
+
+recognition.start();
+
+} catch (e) {
+
+console.error("Error in recognition.start():", e);
+
+if (e.name === 'InvalidStateError') {
+
+console.warn("Attempted to start recognition in invalid state.");
+
+if (initialStartAttempt) {
+
+initialStartAttempt = false;
+
+updateStatus("Failed to start. Try again.");
+
+sessionButton.disabled = false;
+
+} else if (isSessionActive) {
+
+endSession();
+
+updateStatus("Mic error. Session ended.");
+
+}
+
+} else {
+
+updateStatus("Could not start listening. Microphone issue?");
+
+if (initialStartAttempt) {
+
+initialStartAttempt = false;
+
+updateStatus("Failed to start. Try again.");
+
+sessionButton.disabled = false;
+
+} else {
+
+endSession();
+
+}
+
+}
+
+}
+
+}, 250);
+
+}
+
+
+
+function stopRecognition(expectRestart = false) {
+
+clearTimeout(restartTimer);
+
+clearTimeout(silenceTimeout);
+
+if (isListening && recognition) {
+
+console.log("Stopping recognition. Expect restart:", expectRestart);
+
+try {
+
+recognition.stop();
+
+} catch (e) {
+
+console.error("Error stopping recognition:", e);
+
+}
+
+isListening = false;
+
+}
+
+if (!expectRestart && !isProcessing && !isSpeaking && !isSessionActive) {
+
+updateStatus("Stopped.");
+
+}
+
+}
+
+
+
+function handleRecognitionResult(event) {
+
+if (!isSessionActive || isProcessing || isSpeaking) return;
+
+
+
+clearTimeout(silenceTimeout);
+
+
+
+let interimForThisEvent = '';
+
+let hasFinalInEvent = false;
+
+
+
+for (let i = event.resultIndex; i < event.results.length; ++i) {
+
+const transcriptPart = event.results[i][0].transcript;
+
+if (event.results[i].isFinal) {
+
+finalTranscript += transcriptPart.trim() + ' ';
+
+hasFinalInEvent = true;
+
+} else {
+
+interimForThisEvent += transcriptPart;
+
+}
+
+}
+
+if (finalTranscript.trim() || interimForThisEvent.trim()) {
+
+silenceTimeout = setTimeout(handleSilenceTimeout, SILENCE_TIMEOUT_MS);
+
+}
+
+}
+
+
+
+function handleSilenceTimeout() {
+
+if (!isSessionActive || isProcessing || isSpeaking) return;
+
+
+
+if (finalTranscript.trim()) {
+
+console.log(`Silence timeout (${SILENCE_TIMEOUT_MS}ms) detected.`);
+
+addMessageToChat(finalTranscript, 'user');
+
+sendToGemini(finalTranscript);
+
+} else {
+
+console.log("Silence timeout detected, but no transcript to send.");
+
+}
+
+}
+
+
+
+
+
+function handleRecognitionError(event) {
+
+isListening = false;
+
+clearTimeout(silenceTimeout);
+
+console.error('Speech recognition error:', event.error, 'Message:', event.message);
+
+let statusMessage = `Recognition Error: ${event.error}`;
+
+
+
+const wasInitialAttempt = initialStartAttempt;
+
+initialStartAttempt = false;
+
+
+
+if (event.error === 'not-allowed') {
+
+statusMessage = "Microphone access denied. Please allow access in browser settings.";
+
+if (wasInitialAttempt) {
+
+updateStatus("Permission denied. Session not started.");
+
+sessionButton.disabled = false;
+
+} else {
+
+endSession();
+
+}
+
+} else if (event.error === 'no-speech') {
+
+console.log("No speech detected, will restart if session active.");
+
+if(isSessionActive && !isProcessing && !isSpeaking) startRecognition();
+
+return;
+
+} else if (event.error === 'audio-capture') {
+
+statusMessage = "Microphone Error. Check connection/permissions.";
+
+endSession();
+
+} else if (event.error === 'network') {
+
+statusMessage = "Network error during speech recognition. Check connection.";
+
+} else if (event.error === 'service-not-allowed') {
+
+statusMessage = "Speech recognition service denied. Check browser/OS settings.";
+
+endSession();
+
+} else {
+
+statusMessage = `Recognition Error: ${event.error}. Please try restarting the session.`;
+
+}
+
+
+
+updateStatus(statusMessage);
+
+if (wasInitialAttempt && event.error !== 'not-allowed') {
+
+updateStatus("Failed to start microphone.");
+
+sessionButton.disabled = false;
+
+}
+
+}
+
+
+
+function handleRecognitionEnd() {
+
+isListening = false;
+
+clearTimeout(silenceTimeout);
+
+console.log('Recognition ended.');
+
+if (isSessionActive && !isProcessing && !isSpeaking) {
+
+console.log("Session active & idle, attempting to restart recognition...");
+
+startRecognition();
+
+} else if (isSessionActive) {
+
+console.log("Recognition ended, but session is busy (processing/speaking). Will restart after idle.");
+
+} else {
+
+console.log("Recognition ended, session inactive.");
+
+if (sessionButton.classList.contains('active-session')) {
+
+endSession();
+
+}
+
+}
+
+}
+
+
+
+
+
+// --- Gemini API Call ---
+
+async function sendToGemini(text) {
+
+clearTimeout(silenceTimeout);
+
+
+
+const queryText = text.trim();
+
+if (!queryText || isProcessing || isSpeaking) {
+
+console.log("Send request ignored (empty query or already busy).");
+
+return;
+
+}
+
+
+
+const apiKey = apiKeyInput.value.trim();
+
+if (!apiKey) {
+
+updateStatus("Error: Gemini API Key missing.");
+
+endSession();
+
+return;
+
+}
+
+
+
+cancelGeminiCall();
+
+abortController = new AbortController();
+
+
+
+const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+
+
+console.log('Sending to Gemini:', queryText);
+
+isProcessing = true;
+
+setButtonProcessing(true, 'Gemini...');
+
+updateStatus('Asking Gemini...');
+
+let accumulatedGeminiResponse = '';
+
+finalTranscript = '';
+
+
+
+currentGeminiMessageElement = addMessageToChat("...", 'gemini');
+
+
+
+const payload = {
+
+contents: [{ role: "user", parts: [{ text: queryText }] }],
+
+};
+
+
+
+if (isListening) {
+
+stopRecognition(false);
+
+console.log("Recognition paused for Gemini call.");
+
+}
+
+
+
+try {
+
+const response = await fetch(geminiApiUrl, {
+
+method: 'POST',
+
+headers: { 'Content-Type': 'application/json' },
+
+body: JSON.stringify(payload),
+
+signal: abortController.signal
+
+});
+
+
+
+if (!response.ok) {
+
+let errorBody = 'Could not read error details.';
+
+let specificError = `API Error: ${response.status} ${response.statusText}.`;
+
+try {
+
+errorBody = await response.text();
+
+if (errorBody.trim().startsWith('{')) {
+
+const errorJson = JSON.parse(errorBody);
+
+errorBody = errorJson.error?.message || JSON.stringify(errorJson);
+
+if (response.status === 400 && errorBody.includes("API key not valid")) {
+
+specificError = "Invalid Gemini API Key.";
+
+} else if (response.status === 429) {
+
+specificError = "API Quota Exceeded/Rate Limited.";
+
+} else { specificError += ` Details: ${errorBody}`; }
+
+} else { specificError += ` Details: ${errorBody}`; }
+
+} catch (parseError) { specificError += ` Details: ${errorBody}`; }
+
+throw new Error(specificError);
+
+}
+
+
+
+const reader = response.body.getReader();
+
+const decoder = new TextDecoder();
+
+let buffer = '';
+
+let firstChunk = true;
+
+
+
+while (true) {
+
+const { value, done } = await reader.read();
+
+if (done) break;
+
+buffer += decoder.decode(value, { stream: true });
+
+const lines = buffer.split('\n');
+
+buffer = lines.pop();
+
+for (const line of lines) {
+
+if (line.startsWith('data: ')) {
+
+try {
+
+const jsonData = JSON.parse(line.substring(6));
+
+const textPart = jsonData?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+if (textPart) {
+
+if (firstChunk && currentGeminiMessageElement) {
+
+currentGeminiMessageElement.querySelector('p').textContent = textPart;
+
+firstChunk = false;
+
+} else if (currentGeminiMessageElement) {
+
+currentGeminiMessageElement.querySelector('p').textContent += textPart;
+
+}
+
+accumulatedGeminiResponse += textPart;
+
+chatHistory.scrollTop = chatHistory.scrollHeight;
+
+}
+
+} catch (e) { console.warn('Error parsing SSE chunk:', e); }
+
+}
+
+}
+
+}
+
+if (buffer.startsWith('data: ')) {
+
+try {
+
+const jsonData = JSON.parse(buffer.substring(6));
+
+const textPart = jsonData?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+if (textPart && currentGeminiMessageElement) {
+
+if (firstChunk) {
+
+currentGeminiMessageElement.querySelector('p').textContent = textPart;
+
+} else {
+
+currentGeminiMessageElement.querySelector('p').textContent += textPart;
+
+}
+
+accumulatedGeminiResponse += textPart;
+
+chatHistory.scrollTop = chatHistory.scrollHeight;
+
+}
+
+} catch (e) { console.warn('Error parsing final SSE buffer:', e); }
+
+}
+
+
+
+if (firstChunk && currentGeminiMessageElement) {
+
+currentGeminiMessageElement.querySelector('p').textContent = "(No text response)";
+
+}
+
+
+
+console.log('Gemini Response Complete:', accumulatedGeminiResponse.substring(0,100)+"...");
+
+currentGeminiMessageElement = null;
+
+speakText(accumulatedGeminiResponse || "Gemini did not reply.");
+
+
+
+} catch (error) {
+
+if (error.name === 'AbortError') {
+
+console.log('Gemini fetch aborted.');
+
+updateStatus('Call cancelled.');
+
+if (currentGeminiMessageElement) {
+
+currentGeminiMessageElement.querySelector('p').textContent = "(Cancelled)";
+
+}
+
+} else {
+
+console.error('Error calling Gemini API:', error);
+
+updateStatus(`Gemini API Error. Check console.`);
+
+if (currentGeminiMessageElement) {
+
+currentGeminiMessageElement.querySelector('p').textContent = "(Error fetching response)";
+
+}
+
+}
+
+isProcessing = false;
+
+setButtonProcessing(false);
+
+currentGeminiMessageElement = null;
+
+if (isSessionActive && !isListening) {
+
+startRecognition();
+
+}
+
+} finally {
+
+abortController = null;
+
+}
+
+}
+
+
+
+function cancelGeminiCall() {
+
+if (abortController) {
+
+console.log("Aborting Gemini API call...");
+
+abortController.abort();
+
+abortController = null;
+
+}
+
+}
+
+
+
+// --- Text-to-Speech (Using ElevenLabs with Fallback) ---
+
+async function speakText(text) {
+
+const handleTTSFallback = (logMessage) => {
+
+console.warn(logMessage);
+
+isSpeaking = false;
+
+isProcessing = false;
+
+setButtonSpeaking(false);
+
+if (isSessionActive && !isListening) {
+
+updateStatus("Listening...");
+
+startRecognition();
+
+}
+
+};
+
+
+
+if (!ELEVENLABS_API_KEY) {
+
+handleTTSFallback("ElevenLabs API Key missing. Skipping TTS.");
+
+return;
+
+}
+
+if (!text.trim() || !isSessionActive) {
+
+handleTTSFallback("ElevenLabs TTS skipped (no text or session ended).");
+
+return;
+
+}
+
+
+
+const voiceId = ELEVENLABS_VOICE_IDS[currentSttLang] || ELEVENLABS_VOICE_IDS["en-US"];
+
+const elevenLabsApiUrl = ELEVENLABS_API_BASE_URL + voiceId;
+
+
+
+console.log(`Requesting speech from ElevenLabs (Voice ID: ${voiceId})...`);
+
+isSpeaking = true;
+
+setButtonSpeaking(true);
+
+updateStatus('Generating audio...');
+
+
+
+const payload = {
+
+text: text,
+
+model_id: "eleven_multilingual_v2",
+
+voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+
+};
+
+
+
+try {
+
+const response = await fetch(elevenLabsApiUrl, {
+
+method: 'POST',
+
+headers: {
+
+'Content-Type': 'application/json',
+
+'xi-api-key': ELEVENLABS_API_KEY,
+
+'Accept': 'audio/mpeg'
+
+},
+
+body: JSON.stringify(payload)
+
+});
+
+
+
+if (!response.ok) {
+
+let errorDetail = `ElevenLabs API Error: ${response.status} ${response.statusText}`;
+
+try { const errorJson = await response.json(); errorDetail += ` - ${errorJson.detail?.message || JSON.stringify(errorJson.detail)}`; }
+
+catch (e) { try { const textError = await response.text(); errorDetail += ` - ${textError}`; } catch (textE) { /* ignore */ } }
+
+handleTTSFallback(`ElevenLabs API request failed: ${errorDetail}`);
+
+return;
+
+}
+
+
+
+const audioBlob = await response.blob();
+
+if (!audioBlob || audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) {
+
+handleTTSFallback(`Received invalid audio data from ElevenLabs (Type: ${audioBlob?.type}, Size: ${audioBlob?.size}). Skipping TTS.`);
+
+return;
+
+}
+
+
+
+if (currentAudioObjectURL) { URL.revokeObjectURL(currentAudioObjectURL); }
+
+currentAudioObjectURL = URL.createObjectURL(audioBlob);
+
+audioPlayer.src = currentAudioObjectURL;
+
+updateStatus('Speaking...');
+
+audioPlayer.play().catch(playError => {
+
+handleTTSFallback(`Error initiating audio playback: ${playError}. Skipping TTS.`);
+
+});
+
+
+
+} catch (error) {
+
+handleTTSFallback(`Error fetching or processing ElevenLabs audio: ${error}. Skipping TTS.`);
+
+}
+
+}
+
+
+
+
+
+// --- UI Updates ---
+
+function addMessageToChat(text, sender) {
+
+const messageDiv = document.createElement('div');
+
+messageDiv.classList.add('message-bubble', sender);
+
+
+
+const icon = document.createElement('i');
+
+icon.classList.add('fas', sender === 'user' ? 'fa-user' : 'fa-robot');
+
+icon.classList.add(sender === 'user' ? 'text-blue-600' : 'text-gray-500');
+
+
+
+const textP = document.createElement('p');
+
+textP.textContent = text;
+
+
+
+messageDiv.appendChild(icon);
+
+messageDiv.appendChild(textP);
+
+chatHistory.appendChild(messageDiv);
+
+chatHistory.scrollTop = chatHistory.scrollHeight;
+
+return messageDiv;
+
+}
+
+
+
+function updateStatus(message) {
+
+statusDiv.textContent = message;
+
+if (isProcessing && !isSpeaking) {
+
+statusDiv.textContent = "Asking Gemini...";
+
+} else if (isSpeaking) {
+
+statusDiv.textContent = "Speaking...";
+
+}
+
+}
+
+
+
+function showError(message) { // Kept for internal logging, not UI display
+
+console.error("Error occurred:", message);
+
+}
+
+
+
+function hideError() {
+
+// No visual error element to hide
+
+}
+
+
+
+function setButtonProcessing(processing, text = 'Processing...') {
+
+sessionButton.disabled = processing || isSpeaking;
+
+if (processing && !isSpeaking) {
+
+sessionButton.classList.remove('speaking');
+
+sessionButton.classList.add('processing');
+
+sessionButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> ${text}`;
+
+} else if (!processing && !isSpeaking && isSessionActive) {
+
+sessionButton.classList.remove('processing', 'speaking');
+
+sessionButton.innerHTML = '<i class="fas fa-stop mr-2"></i> End Session';
+
+sessionButton.classList.add('active-session');
+
+sessionButton.disabled = false;
+
+} else if (!isSessionActive) {
+
+sessionButton.classList.remove('processing', 'speaking', 'active-session');
+
+sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
+
+// sessionButton.classList.add('bg-green-500', 'hover:bg-green-600'); // Style handled by CSS
+
+sessionButton.disabled = false;
+
+}
+
+}
+
+
+
+function setButtonSpeaking(speaking) {
+
+sessionButton.disabled = speaking || isProcessing;
+
+if (speaking) {
+
+sessionButton.classList.remove('processing');
+
+sessionButton.classList.add('speaking');
+
+sessionButton.innerHTML = `<i class="fas fa-volume-up mr-2"></i> Speaking...`;
+
+} else {
+
+sessionButton.classList.remove('speaking');
+
+if (isProcessing) {
+
+setButtonProcessing(true);
+
+} else if (isSessionActive) {
+
+sessionButton.innerHTML = '<i class="fas fa-stop mr-2"></i> End Session';
+
+sessionButton.classList.add('active-session');
+
+sessionButton.disabled = false;
+
+} else {
+
+sessionButton.innerHTML = '<i class="fas fa-play mr-2"></i> Start Session';
+
+// sessionButton.classList.add('bg-green-500', 'hover:bg-green-600'); // Style handled by CSS
+
+sessionButton.disabled = false;
+
+}
+
+}
+
+}
+
+</script>
+
 </body>
+
 </html>
