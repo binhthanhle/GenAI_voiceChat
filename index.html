@@ -297,7 +297,7 @@
         let isProcessing = false;
         let isSpeaking = false;
         let recognition;
-        let finalTranscript = ''; // Accumulates final parts of the current user utterance
+        let currentUtteranceFinalTranscript = ''; // Accumulates final parts of the current user utterance
         let currentGeminiMessageElement = null;
         let currentUserQueryBubble = null; // To hold the current user's speech bubble for real-time updates
         let currentSttLang = sttLanguageSelect.value;
@@ -339,7 +339,6 @@
             console.log("Silence Timeout changed to:", SILENCE_TIMEOUT_MS);
             if (silenceTimeout) {
                 clearTimeout(silenceTimeout);
-                // Check if there's an active user query bubble being formed
                 if (isListening && currentUserQueryBubble && currentUserQueryBubble.querySelector('.message-content').textContent.trim()) {
                     silenceTimeout = setTimeout(handleSilenceTimeout, SILENCE_TIMEOUT_MS);
                 }
@@ -414,8 +413,8 @@
             }
 
             console.log("Attempting to start session...");
-            finalTranscript = '';
-            currentUserQueryBubble = null; // Reset user query bubble
+            currentUtteranceFinalTranscript = ''; // Reset transcript for the new session
+            currentUserQueryBubble = null;
             updateStatus("Requesting microphone access...");
             initialStartAttempt = true;
             startRecognition();
@@ -450,7 +449,7 @@
 
             isProcessing = false;
             isSpeaking = false;
-            finalTranscript = '';
+            currentUtteranceFinalTranscript = '';
             currentGeminiMessageElement = null;
             currentUserQueryBubble = null;
         }
@@ -462,7 +461,7 @@
             }
             chatHistory.innerHTML = '';
             addMessageToChat("Session cleared. Ready to start a new conversation.", "gemini");
-            finalTranscript = '';
+            currentUtteranceFinalTranscript = '';
             currentGeminiMessageElement = null;
             currentUserQueryBubble = null;
             updateStatus('Session Cleared. Ready to start.');
@@ -502,17 +501,16 @@
              recognition.onspeechend = () => {
                 console.log("User stopped speaking (onspeechend).");
                 clearTimeout(silenceTimeout);
-                // If there's a final transcript and we are not already processing, send it.
-                // This handles cases where user stops speaking before silence timeout.
-                if (isSessionActive && !isProcessing && !isSpeaking && finalTranscript.trim()) {
+                if (isSessionActive && !isProcessing && !isSpeaking && currentUtteranceFinalTranscript.trim()) {
                     console.log("Sending query after onspeechend.");
-                    if (currentUserQueryBubble) { // Ensure the bubble has the final text
-                        currentUserQueryBubble.querySelector('.message-content').textContent = finalTranscript.trim();
-                    } else { // Should have been created, but as a fallback
-                        addMessageToChat(finalTranscript.trim(), 'user');
+                    const queryToSend = currentUtteranceFinalTranscript.trim();
+                    if (currentUserQueryBubble) {
+                        currentUserQueryBubble.querySelector('.message-content').textContent = queryToSend;
+                    } else {
+                        addMessageToChat(queryToSend, 'user');
                     }
-                    sendToGemini(finalTranscript.trim());
-                    finalTranscript = '';
+                    sendToGemini(queryToSend);
+                    currentUtteranceFinalTranscript = '';
                     currentUserQueryBubble = null;
                 }
              };
@@ -523,8 +521,8 @@
 
             clearTimeout(restartTimer);
             clearTimeout(silenceTimeout);
-            // finalTranscript = ''; // Cleared when a query is sent or session starts
-            // currentUserQueryBubble = null; // Cleared when a query is sent or session starts
+            // currentUtteranceFinalTranscript is reset when a query is sent or session starts/clears
+            // currentUserQueryBubble is reset when a query is sent or session starts/clears
 
             restartTimer = setTimeout(() => {
                 try {
@@ -577,28 +575,32 @@
          function handleRecognitionResult(event) {
             if (!isSessionActive || isProcessing || isSpeaking) return;
 
-            clearTimeout(silenceTimeout); // Reset silence timer on any result
+            clearTimeout(silenceTimeout);
 
             let interimTranscriptForEvent = '';
-            let currentFinalTranscript = finalTranscript; // Use a copy for this event's processing
+            // currentUtteranceFinalTranscript accumulates final parts across multiple onresult events for the same utterance.
+            // It's only reset when the utterance is sent to Gemini or session ends/clears.
 
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 const transcriptPart = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
-                    currentFinalTranscript += transcriptPart.trim() + ' ';
+                    // Append the new final part to the ongoing utterance's final transcript
+                    currentUtteranceFinalTranscript += transcriptPart.trim() + ' ';
                 } else {
                     interimTranscriptForEvent += transcriptPart;
                 }
             }
-            finalTranscript = currentFinalTranscript; // Update global finalTranscript
 
-            const liveDisplayQuery = finalTranscript + interimTranscriptForEvent;
+            // Display combines the accumulated final parts of the current utterance with the current interim part
+            const liveDisplayQuery = (currentUtteranceFinalTranscript + interimTranscriptForEvent).trim();
 
-            if (liveDisplayQuery.trim()) {
+            if (liveDisplayQuery) { // Only update/create bubble if there's text
                 if (!currentUserQueryBubble) {
-                    currentUserQueryBubble = addMessageToChat(liveDisplayQuery.trim(), 'user');
+                    // Create a new bubble for the start of a new user utterance
+                    currentUserQueryBubble = addMessageToChat(liveDisplayQuery, 'user');
                 } else {
-                    currentUserQueryBubble.querySelector('.message-content').textContent = liveDisplayQuery.trim();
+                    // Update the existing bubble for the current utterance
+                    currentUserQueryBubble.querySelector('.message-content').textContent = liveDisplayQuery;
                 }
                 chatHistory.scrollTop = chatHistory.scrollHeight;
                 // Set a new silence timeout
@@ -609,26 +611,21 @@
         function handleSilenceTimeout() {
              if (!isSessionActive || isProcessing || isSpeaking) return;
 
-             const queryToSend = finalTranscript.trim();
+             const queryToSend = currentUtteranceFinalTranscript.trim();
              if (queryToSend) {
                  console.log(`Silence timeout (${SILENCE_TIMEOUT_MS}ms) detected. Sending: "${queryToSend}"`);
-                 // The user bubble should already be up-to-date from handleRecognitionResult
-                 // If currentUserQueryBubble exists, its content is the final one.
-                 // No need to call addMessageToChat again unless it was somehow missed.
-                 if (currentUserQueryBubble) {
+                 if (currentUserQueryBubble) { // Ensure the bubble content is finalized
                      currentUserQueryBubble.querySelector('.message-content').textContent = queryToSend;
-                 } else {
-                     // This case should ideally not be hit if handleRecognitionResult works correctly
+                 } else { // Should not happen if handleRecognitionResult created it
                      addMessageToChat(queryToSend, 'user');
                  }
                  sendToGemini(queryToSend);
-                 finalTranscript = ''; // Reset for the next utterance
-                 currentUserQueryBubble = null; // Reset for the next utterance
+                 currentUtteranceFinalTranscript = ''; // Reset for the next utterance
+                 currentUserQueryBubble = null;
              } else {
                  console.log("Silence timeout detected, but no final transcript to send.");
-                 finalTranscript = ''; // Still reset if empty
+                 currentUtteranceFinalTranscript = ''; // Reset if empty
                  currentUserQueryBubble = null;
-                 // Optionally, restart recognition if it stopped due to prolonged silence without final results
                  if(isSessionActive && !isListening && !isProcessing && !isSpeaking) {
                     startRecognition();
                  }
@@ -680,12 +677,10 @@
             isListening = false;
             clearTimeout(silenceTimeout);
             console.log('Recognition ended.');
-            // If session is active and we are not processing/speaking, and there's no pending final transcript
-            // that handleSilenceTimeout or onspeechend should have caught, then restart.
-            if (isSessionActive && !isProcessing && !isSpeaking && !finalTranscript.trim()) {
+            if (isSessionActive && !isProcessing && !isSpeaking && !currentUtteranceFinalTranscript.trim()) {
                 console.log("Session active & idle, attempting to restart recognition...");
                 startRecognition();
-            } else if (isSessionActive && (isProcessing || isSpeaking || finalTranscript.trim())) {
+            } else if (isSessionActive && (isProcessing || isSpeaking || currentUtteranceFinalTranscript.trim())) {
                  console.log("Recognition ended, but session is busy or has pending transcript. Will restart/process after idle.");
             } else if (!isSessionActive) {
                  console.log("Recognition ended, session inactive.");
@@ -703,10 +698,8 @@
             const queryText = text.trim();
             if (!queryText || isProcessing || isSpeaking) {
                 console.log("Send request ignored (empty query or already busy).");
-                // If the query was empty but we had a bubble for interim, remove/clear it
                 if (!queryText && currentUserQueryBubble) {
-                    // currentUserQueryBubble.remove(); // Or clear its content
-                    currentUserQueryBubble = null;
+                    currentUserQueryBubble = null; // No need to keep empty bubble
                 }
                 return;
             }
@@ -728,7 +721,7 @@
             setButtonProcessing(true, 'Gemini...');
             updateStatus('Asking Gemini...');
             let accumulatedGeminiResponse = '';
-            // finalTranscript and currentUserQueryBubble are reset by the caller (handleSilenceTimeout or onspeechend)
+            // currentUtteranceFinalTranscript and currentUserQueryBubble are reset by the calling function (handleSilenceTimeout or onspeechend)
 
             currentGeminiMessageElement = addMessageToChat("...", 'gemini');
 
@@ -770,7 +763,6 @@
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
-                // let firstChunk = true; // Not needed with accumulated parsing
 
                 while (true) {
                     const { value, done } = await reader.read();
@@ -795,7 +787,7 @@
                         }
                     }
                 }
-                 if (buffer.startsWith('data: ')) { // Process any remaining part in buffer
+                 if (buffer.startsWith('data: ')) {
                      try {
                          const jsonData = JSON.parse(buffer.substring(6));
                          const textPart = jsonData?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -808,14 +800,13 @@
                      } catch (e) { console.warn('Error parsing final SSE buffer:', e); }
                  }
 
-                 // If after all streaming, the content is still "..." or empty, update it.
                  if (currentGeminiMessageElement && currentGeminiMessageElement.querySelector('.message-content').innerHTML === "..." && !accumulatedGeminiResponse.trim()) {
                      currentGeminiMessageElement.querySelector('.message-content').textContent = "(No text response)";
                  }
 
 
                 console.log('Gemini Response Complete:', accumulatedGeminiResponse.substring(0,100)+"...");
-                currentGeminiMessageElement = null; // Clear after processing
+                currentGeminiMessageElement = null;
                 speakText(accumulatedGeminiResponse || "Gemini did not reply.");
 
             } catch (error) {
@@ -937,9 +928,9 @@
 
             const contentDiv = document.createElement('div');
             contentDiv.classList.add('message-content');
-            if (sender === 'user' || text === "..." || text.startsWith("(") ) { // Placeholders/errors as text
+            if (sender === 'user' || text === "..." || text.startsWith("(") ) {
                 contentDiv.textContent = text;
-            } else { // Gemini responses as Markdown
+            } else {
                 const unsafeHtml = marked.parse(text);
                 contentDiv.innerHTML = DOMPurify.sanitize(unsafeHtml);
             }
